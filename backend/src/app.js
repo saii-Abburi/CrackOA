@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import env from './config/env.js';
+import connectDB from './config/db.js';
 import { generalLimiter } from './middleware/rateLimit.middleware.js';
 import errorHandler, { notFound } from './middleware/error.middleware.js';
 
@@ -20,6 +21,10 @@ import { getDashboard } from './controllers/progress.controller.js';
 import { protect } from './middleware/auth.middleware.js';
 
 const app = express();
+
+// Connect to Database here because Vercel bypasses server.js
+// and imports app.js directly as a serverless function.
+connectDB();
 
 // Trust the first proxy (Vercel) so express-rate-limit and req.ip
 // correctly resolve the client IP from the X-Forwarded-For header.
