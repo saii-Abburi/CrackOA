@@ -18,11 +18,12 @@ import seoRoutes from './routes/seo.routes.js';
 // Progress controller for dashboard (separate route)
 import { getDashboard } from './controllers/progress.controller.js';
 import { protect } from './middleware/auth.middleware.js';
-import dns from "dns";
-
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const app = express();
+
+// Trust the first proxy (Vercel) so express-rate-limit and req.ip
+// correctly resolve the client IP from the X-Forwarded-For header.
+app.set('trust proxy', 1);
 
 // ──────────────────────────────────────────
 // Security Middleware
@@ -31,7 +32,7 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin:"*",
+    origin: env.CLIENT_URL,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
