@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2 } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
 /**
  * Reusable problems table with configurable columns, pagination, and progress checkboxes.
@@ -35,6 +36,7 @@ export default function ProblemsTable({
   renderActions,
 }) {
   const [loginPrompt, setLoginPrompt] = useState(false);
+  const location = useLocation();
 
   const columnConfig = {
     status: { label: 'Status', align: '' },
@@ -176,14 +178,13 @@ export default function ProblemsTable({
                           case 'title':
                             return (
                               <td key={col} className="px-4 py-4 font-medium text-white max-w-xs">
-                                <a
-                                  href={linkUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className=" flex items-center gap-2 group text-sm"
+                                <Link
+                                  to={`/problems/${prob.slug || prob._id}`}
+                                  state={{ from: location.pathname + location.search }}
+                                  className=" flex items-center gap-2 group text-sm hover:text-accent transition-colors"
                                 >
                                   <span className="">{prob.title}</span>
-                                </a>
+                                </Link>
                               </td>
                             );
 

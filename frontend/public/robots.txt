@@ -7,6 +7,6 @@ Disallow: /login/
 Disallow: /register/
 Disallow: /forgot-password/
 
-# Depending on your deployment, this should point to your backend API's sitemap
-# Note: For production, change http://localhost:5000 to your actual API domain
-Sitemap: http://localhost:5000/api/seo/sitemap.xml
+# Depending on your deployment, this should point to your frontend domain's sitemap
+# Note: For production, change to your actual frontend domain
+Sitemap: https://coderank.dev/sitemap.xml

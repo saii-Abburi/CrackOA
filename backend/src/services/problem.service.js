@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
 import Company from '../models/Company.js';
 import { buildPagination } from '../utils/apiResponse.js';
@@ -66,18 +67,25 @@ export const getAllProblems = async (query) => {
 };
 
 /**
- * Get a single problem by MongoDB ID or leetcodeId.
+ * Get a single problem by MongoDB ID, leetcodeId, or slug.
  */
 export const getProblemById = async (id) => {
-  // Support both MongoDB ObjectId and leetcodeId (numeric)
   let problem;
 
-  if (!isNaN(Number(id))) {
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    problem = await Problem.findById(id)
+      .populate('companies', 'name slug logo')
+      .lean();
+  }
+
+  if (!problem && !isNaN(Number(id))) {
     problem = await Problem.findOne({ leetcodeId: Number(id) })
       .populate('companies', 'name slug logo')
       .lean();
-  } else {
-    problem = await Problem.findById(id)
+  }
+
+  if (!problem && typeof id === 'string') {
+    problem = await Problem.findOne({ slug: id })
       .populate('companies', 'name slug logo')
       .lean();
   }

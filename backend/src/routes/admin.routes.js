@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import * as companyController from '../controllers/company.controller.js';
 import * as problemController from '../controllers/problem.controller.js';
+import * as blogController from '../controllers/blog.controller.js';
 import { protect, restrictTo } from '../middleware/auth.middleware.js';
 import validate from '../middleware/validate.middleware.js';
 
@@ -40,6 +41,24 @@ router.post('/problems', problemValidation, validate, problemController.createPr
 router.post('/problems/bulk-import', problemController.bulkImportProblems);
 router.patch('/problems/:id', problemController.updateProblem);
 router.delete('/problems/:id', problemController.deleteProblem);
+
+// ----- Blog Admin Routes -----
+
+const blogValidation = [
+  body('title').trim().notEmpty().withMessage('Title is required.').isLength({ max: 200 }).withMessage('Title cannot exceed 200 characters.'),
+  body('slug').trim().notEmpty().withMessage('Slug is required.').isSlug().withMessage('Invalid slug format.'),
+  body('problem').isMongoId().withMessage('Valid problem ID is required.'),
+  body('excerpt').trim().notEmpty().withMessage('Excerpt is required.'),
+  body('content').isObject().withMessage('Content must be an object containing sections.'),
+];
+
+router.get('/blogs', blogController.getAdminBlogs);
+router.get('/blogs/reports', blogController.getAdminReports);
+router.patch('/blogs/reports/:reportId', blogController.updateReportStatus);
+router.get('/blogs/:id', blogController.getAdminBlogById);
+router.post('/blogs', blogValidation, validate, blogController.createBlog);
+router.patch('/blogs/:id', blogController.updateBlog); // Validation omitted for brevity on partial updates, can be added later
+router.delete('/blogs/:id', blogController.deleteBlog);
 
 // ----- Admin Stats Route -----
 router.get('/stats', async (req, res, next) => {

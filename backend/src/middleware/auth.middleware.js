@@ -40,6 +40,30 @@ export const protect = async (req, res, next) => {
 };
 
 /**
+ * Optional protect middleware — populates req.user if token is present, but doesn't reject unauthenticated requests.
+ */
+export const optionalProtect = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, env.JWT_SECRET);
+        const user = await User.findById(decoded.userId).lean();
+        if (user) {
+          req.user = user;
+        }
+      } catch {
+        // Ignore token errors for optional protection
+      }
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Restrict access to specific roles.
  * Must be used after `protect`.
  * @param {...string} roles - Allowed roles
@@ -57,3 +81,9 @@ export const restrictTo = (...roles) => {
     next();
   };
 };
+
+/**
+ * Admin shortcut middleware.
+ */
+export const admin = restrictTo('admin');
+

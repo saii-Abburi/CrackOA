@@ -5,11 +5,18 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "start": "nodemon src/server.js",
     "seed": "node src/seed/seed.js"
   },
-  "keywords": ["dsa", "leetcode", "interview", "backend", "express", "mongodb"],
+  "keywords": [
+    "dsa",
+    "leetcode",
+    "interview",
+    "backend",
+    "express",
+    "mongodb"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -23,6 +30,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.4",
     "morgan": "^1.10.0",
+    "nodemon": "^3.1.14",
+    "sitemap": "^9.0.1",
     "slugify": "^1.6.6"
   },
   "engines": {

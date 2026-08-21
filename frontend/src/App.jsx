@@ -18,6 +18,11 @@ import CompaniesPage from './pages/CompaniesPage.jsx';
 import CompanyDetailPage from './pages/CompanyDetailPage.jsx';
 import ProblemsPage from './pages/ProblemsPage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import BlogsPage from './pages/BlogsPage.jsx';
+import BlogPage from './pages/BlogPage.jsx';
+import UserBlogsPage from './pages/UserBlogsPage.jsx';
+import AdminBlogsPage from './pages/AdminBlogsPage.jsx';
+import ProblemPage from './pages/ProblemPage.jsx';
 
 function App() {
   return (
@@ -49,6 +54,11 @@ function App() {
                   <ProblemsPage />
                 </AuthenticatedLayout>
               } />
+              <Route path="/problems/:id" element={
+                <AuthenticatedLayout>
+                  <ProblemPage />
+                </AuthenticatedLayout>
+              } />
               <Route path="/companies" element={
                 <AuthenticatedLayout>
                   <CompaniesPage />
@@ -59,6 +69,26 @@ function App() {
                   <CompanyDetailPage />
                 </AuthenticatedLayout>
               } />
+              
+              {/* Blog Routes */}
+              <Route path="/blogs" element={
+                <AuthenticatedLayout>
+                  <BlogsPage />
+                </AuthenticatedLayout>
+              } />
+              <Route path="/blogs/:slug" element={
+                <AuthenticatedLayout>
+                  <BlogPage />
+                </AuthenticatedLayout>
+              } />
+              <Route path="/my-blogs" element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <UserBlogsPage />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              } />
+              
               <Route path="/topics" element={
                 <AuthenticatedLayout>
                   <PlaceholderPage
@@ -99,6 +129,16 @@ function App() {
                   </AdminRoute>
                 }
               />
+              <Route
+                path="/admin/blogs"
+                element={
+                  <AdminRoute>
+                    <AuthenticatedLayout>
+                      <AdminBlogsPage />
+                    </AuthenticatedLayout>
+                  </AdminRoute>
+                }
+              />
 
               {/* Catch-all */}
               <Route
@@ -118,6 +158,7 @@ function App() {
             <Route path="/dashboard" element={null} />
             <Route path="/settings" element={null} />
             <Route path="/admin" element={null} />
+            <Route path="/admin/blogs" element={null} />
             <Route path="*" element={<Footer />} />
           </Routes>
         </div>

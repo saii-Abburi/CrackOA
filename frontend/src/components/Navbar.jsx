@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Code2, Menu, X, ChevronRight, User, LogOut, LayoutDashboard, ChevronDown, Upload } from 'lucide-react';
+import { Code2, Menu, X, ChevronRight, User, LogOut, LayoutDashboard, ChevronDown, Upload, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const navLinks = [
   { label: 'Problems', href: '/problems' },
   { label: 'Companies', href: '/companies' },
   { label: 'Topics', href: '/topics' },
+  { label: 'Blogs', href: '/blogs' },
   { label: 'How It Works', href: '/#how-it-works' },
 ];
 
@@ -69,6 +70,16 @@ function UserMenu({ user, onLogout }) {
             >
               <LayoutDashboard className="w-4 h-4" aria-hidden="true" />
               Dashboard
+            </Link>
+
+            <Link
+              to="/my-blogs"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+              role="menuitem"
+            >
+              <BookOpen className="w-4 h-4 text-accent" aria-hidden="true" />
+              My Editorials
             </Link>
 
             <Link

@@ -284,12 +284,21 @@ export default function AdminPage() {
             </h1>
           </div>
 
-          <button
-            onClick={() => { fetchStats(); fetchCompanies(); fetchProblems(); }}
-            className="btn-secondary self-start md:self-auto text-sm py-2 px-4"
-          >
-            <RefreshCw className="w-4 h-4" aria-hidden="true" /> Refresh Data
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/admin/blogs"
+              className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-lg bg-accent text-white"
+            >
+              <FileText className="w-4 h-4" aria-hidden="true" /> Verify User Blogs
+            </Link>
+
+            <button
+              onClick={() => { fetchStats(); fetchCompanies(); fetchProblems(); }}
+              className="btn-secondary self-start md:self-auto text-sm py-2 px-4"
+            >
+              <RefreshCw className="w-4 h-4" aria-hidden="true" /> Refresh Data
+            </button>
+          </div>
         </div>
 
         {/* System Overview Stats Banner */}

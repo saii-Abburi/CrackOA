@@ -15,16 +15,13 @@ import problemRoutes from './routes/problem.routes.js';
 import progressRoutes from './routes/progress.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import seoRoutes from './routes/seo.routes.js';
+import blogRoutes from './routes/blog.routes.js';
 
 // Progress controller for dashboard (separate route)
 import { getDashboard } from './controllers/progress.controller.js';
 import { protect } from './middleware/auth.middleware.js';
 
 const app = express();
-
-// Connect to Database here because Vercel bypasses server.js
-// and imports app.js directly as a serverless function.
-connectDB();
 
 // Trust the first proxy (Vercel) so express-rate-limit and req.ip
 // correctly resolve the client IP from the X-Forwarded-For header.
@@ -84,6 +81,10 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', protect, getDashboard);
 app.use('/api/seo', seoRoutes);
+app.use('/api/blogs', blogRoutes);
+
+// Mount SEO routes on root as well for direct /sitemap.xml and /robots.txt access
+app.use('/', seoRoutes);
 
 // ──────────────────────────────────────────
 // 404 & Error Handling (must be last)
