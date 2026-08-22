@@ -72,6 +72,19 @@ app.get('/health', (req, res) => {
 });
 
 // ──────────────────────────────────────────
+// Database Connection Middleware (Serverless/Vercel)
+// ──────────────────────────────────────────
+app.use(async (req, res, next) => {
+  if (req.path === '/health') return next();
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────
 // API Routes
 // ──────────────────────────────────────────
 app.use('/api/auth', authRoutes);

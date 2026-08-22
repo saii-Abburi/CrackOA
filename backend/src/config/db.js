@@ -1,32 +1,35 @@
-import dns from 'node:dns';
 import mongoose from 'mongoose';
 import env from './env.js';
 
-// Configure fallback public DNS servers to prevent Windows querySrv ECONNREFUSED issues on mongodb+srv
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch (e) {
-  // Ignore if custom DNS setting fails
-}
+let connPromise = null;
 
 const connectDB = async () => {
   if (mongoose.connection.readyState >= 1) {
     return;
   }
 
-  console.log('Connecting to MongoDB...');
-  console.log('URI:', env.MONGODB_URI?.substring(0, 15) + '...'); // Log first 15 chars
+  if (connPromise) {
+    return connPromise;
+  }
 
-  try {
-    const conn = await mongoose.connect(env.MONGODB_URI, {
-      // These options are defaults in mongoose 8 but kept for clarity
+  console.log('Connecting to MongoDB...');
+  console.log('URI:', env.MONGODB_URI ? env.MONGODB_URI.substring(0, 15) + '...' : 'Undefined');
+
+  connPromise = mongoose
+    .connect(env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    })
+    .then((conn) => {
+      console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+      return conn;
+    })
+    .catch((error) => {
+      connPromise = null;
+      console.error(`❌ MongoDB connection error: ${error.message}`);
+      throw error;
     });
 
-    console.log(`✅ MongoDB connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`❌ MongoDB connection error: ${error.message}`);
-    process.exit(1);
-  }
+  return connPromise;
 };
 
 // Handle connection events
