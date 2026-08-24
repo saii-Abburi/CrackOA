@@ -153,12 +153,13 @@ function App() {
             </Routes>
           </div>
 
-          {/* Hide footer on dashboard, settings, and admin for more workspace */}
+          {/* Hide footer on dashboard, settings, admin, and problem workspace for maximum space */}
           <Routes>
             <Route path="/dashboard" element={null} />
             <Route path="/settings" element={null} />
             <Route path="/admin" element={null} />
             <Route path="/admin/blogs" element={null} />
+            <Route path="/problems/:id" element={null} />
             <Route path="*" element={<Footer />} />
           </Routes>
         </div>

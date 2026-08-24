@@ -328,28 +328,36 @@ export default function BlogsPage() {
                     <span>{blog.readingTime || 5} min read</span>
                   </div>
                   
-                  {activeTab === 'my-submissions' ? (
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {/* Show published date if on explore tab */}
+                    {activeTab !== 'my-submissions' && blog.publishedAt && (
+                      <span className="text-text-muted transition-colors mr-1">
+                        {new Date(blog.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    )}
+
+                    {/* Any logged in user can edit any blog */}
+                    {isAuthenticated && (
                       <button
                         onClick={() => handleOpenModal(blog)}
                         className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-colors"
-                        title="Edit Submission"
+                        title="Edit Article"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
+                    )}
+
+                    {/* Only Blog Owner or Admin can delete */}
+                    {isAuthenticated && (user?.role === 'admin' || (blog.author && (blog.author._id === user?._id || blog.author === user?._id))) && (
                       <button
                         onClick={() => handleDelete(blog._id)}
                         className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="Delete Submission"
+                        title="Delete Article"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                    </div>
-                  ) : (
-                    <span className="text-text-muted group-hover:text-white transition-colors">
-                      {blog.publishedAt ? new Date(blog.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
-                    </span>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

@@ -49,14 +49,23 @@ export default function UserBlogsPage() {
         if (found) {
           handleOpenModal(found);
         } else {
-          // Fetch directly if not in initial array
+          // Fetch directly by ID or slug if not in my-blogs
           api.get(`/blogs/${editId}`).then((singleRes) => {
-            if (singleRes.data?.data) handleOpenModal(singleRes.data.data);
-          }).catch(() => {});
+            if (singleRes.data?.data) {
+              handleOpenModal(singleRes.data.data);
+            }
+          }).catch(() => {
+            if (user?.role === 'admin') {
+              api.get(`/admin/blogs`).then((adminRes) => {
+                const adminFound = (adminRes.data?.data || []).find((b) => b._id === editId);
+                if (adminFound) handleOpenModal(adminFound);
+              }).catch(() => {});
+            }
+          });
         }
       }).catch(() => {});
     }
-  }, [location.search]);
+  }, [location.search, user]);
 
   const loadMyBlogs = async () => {
     setLoading(true);
@@ -133,6 +142,9 @@ export default function UserBlogsPage() {
         throw new Error('Invalid JSON format in content structure.');
       }
 
+      // Non-admin edits require admin approval (published: false). Admins can directly approve/publish.
+      const isApproved = user?.role === 'admin' ? true : false;
+
       const payload = {
         title: formData.title,
         slug: formData.slug,
@@ -140,7 +152,7 @@ export default function UserBlogsPage() {
         excerpt: formData.excerpt,
         content: parsedContent,
         readingTime: Number(formData.readingTime),
-        published: false, // Non-admin edits/creates are submitted for approval
+        published: isApproved,
       };
 
       if (currentBlog) {

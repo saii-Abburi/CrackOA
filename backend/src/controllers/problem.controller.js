@@ -1,4 +1,5 @@
 import * as problemService from '../services/problem.service.js';
+import { fetchLeetCodeQuestionDetails } from '../services/leetcode.service.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 /**
@@ -32,6 +33,50 @@ export const getProblemCompanies = async (req, res, next) => {
   try {
     const companies = await problemService.getProblemCompanies(req.params.id);
     return sendSuccess(res, 200, 'Problem companies fetched successfully.', companies);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/problems/:id/sync-leetcode
+ * GET /api/problems/:id/sync-leetcode
+ */
+export const syncProblemWithLeetCode = async (req, res, next) => {
+  try {
+    const problem = await problemService.syncProblemFromLeetCode(req.params.id);
+    return sendSuccess(res, 200, 'Problem statement and metrics synced from LeetCode successfully.', problem);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/problems/leetcode/preview?query=two-sum
+ */
+export const previewLeetCode = async (req, res, next) => {
+  try {
+    const queryStr = req.query.query || req.query.slug || req.query.url;
+    if (!queryStr) {
+      return res.status(400).json({
+        success: false,
+        message: 'Query parameter "query", "slug", or "url" is required.',
+      });
+    }
+    const leetcodeData = await fetchLeetCodeQuestionDetails(queryStr);
+    return sendSuccess(res, 200, 'LeetCode problem details fetched successfully.', leetcodeData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/admin/problems/sync-all-leetcode
+ */
+export const syncAllProblemsWithLeetCode = async (req, res, next) => {
+  try {
+    const result = await problemService.syncAllProblemsFromLeetCode();
+    return sendSuccess(res, 200, 'Batch sync with LeetCode completed.', result);
   } catch (error) {
     next(error);
   }
@@ -74,6 +119,46 @@ export const deleteProblem = async (req, res, next) => {
 };
 
 /**
+ * POST /api/problems/:id/run
+ */
+export const runCode = async (req, res, next) => {
+  try {
+    const { language, code, testCases } = req.body;
+    const result = await problemService.runCode(req.params.id, { language, code, testCases });
+    return sendSuccess(res, 200, 'Code executed.', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/problems/:id/submit
+ */
+export const submitCode = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    const { language, code } = req.body;
+    const result = await problemService.submitCode(userId, req.params.id, { language, code });
+    return sendSuccess(res, 200, 'Submission evaluated successfully.', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/problems/:id/submissions
+ */
+export const getSubmissions = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    const submissions = await problemService.getSubmissions(userId, req.params.id);
+    return sendSuccess(res, 200, 'Submissions fetched.', submissions);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * POST /api/admin/problems/bulk-import
  */
 export const bulkImportProblems = async (req, res, next) => {
@@ -93,4 +178,6 @@ export const bulkImportProblems = async (req, res, next) => {
     next(error);
   }
 };
+
+
 

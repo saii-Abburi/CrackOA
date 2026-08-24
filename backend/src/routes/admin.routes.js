@@ -39,6 +39,7 @@ const problemValidation = [
 
 router.post('/problems', problemValidation, validate, problemController.createProblem);
 router.post('/problems/bulk-import', problemController.bulkImportProblems);
+router.post('/problems/sync-all-leetcode', problemController.syncAllProblemsWithLeetCode);
 router.patch('/problems/:id', problemController.updateProblem);
 router.delete('/problems/:id', problemController.deleteProblem);
 

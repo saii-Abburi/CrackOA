@@ -64,6 +64,22 @@ const problemSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    hints: {
+      type: [String],
+      default: [],
+    },
+    codeSnippets: [
+      {
+        lang: String,
+        langSlug: String,
+        code: String,
+      },
+    ],
+    stats: {
+      totalAccepted: String,
+      totalSubmission: String,
+      acRate: String,
+    },
   },
   {
     timestamps: true,

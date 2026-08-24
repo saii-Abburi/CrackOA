@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Blog from '../models/Blog.js';
 import Problem from '../models/Problem.js';
 import Comment from '../models/Comment.js';
@@ -73,14 +74,18 @@ export const getUserBlogs = async ({ authorId, page = 1, limit = 12 }) => {
 };
 
 /**
- * Get a single blog by slug. Published blogs are visible to all; pending blogs are visible to author or admin.
+ * Get a single blog by slug or ID. Published blogs are visible to all; pending blogs are visible to author or admin.
  */
 export const getBlogBySlug = async (slug, user = null) => {
-  let filter = { slug };
+  const isObjectId = mongoose.Types.ObjectId.isValid(slug);
+  let filter = isObjectId ? { $or: [{ _id: slug }, { slug }] } : { slug };
 
   if (!user || user.role !== 'admin') {
     if (user) {
-      filter.$or = [{ published: true }, { author: user._id }];
+      filter.$and = [
+        isObjectId ? { $or: [{ _id: slug }, { slug }] } : { slug },
+        { $or: [{ published: true }, { author: user._id }] }
+      ];
     } else {
       filter.published = true;
     }
@@ -193,18 +198,13 @@ export const createBlog = async (blogData, user) => {
 
 /**
  * Update an existing blog.
- * Non-admins can only update their own blogs and cannot set `published = true` (edits reset published status to false).
+ * Any logged in user can update any blog. Non-admin edits force the blog back to pending approval (`published = false`).
  */
 export const updateBlog = async (id, updateData, user) => {
   const blog = await Blog.findById(id);
   if (!blog) return { error: 'NOT_FOUND', message: 'Blog not found' };
 
   const isUserAdmin = user?.role === 'admin';
-  const isAuthor = blog.author && blog.author.toString() === user._id.toString();
-
-  if (!isUserAdmin && !isAuthor) {
-    return { error: 'FORBIDDEN', message: 'You can only update your own blogs' };
-  }
 
   // Non-admin edits force the blog back to pending approval
   if (!isUserAdmin) {
@@ -230,7 +230,7 @@ export const updateBlog = async (id, updateData, user) => {
 
 /**
  * Delete a blog.
- * Non-admins can only delete their own blogs.
+ * Only the blog owner (author) and admin can delete the blog.
  */
 export const deleteBlog = async (id, user) => {
   const blog = await Blog.findById(id);
@@ -240,7 +240,7 @@ export const deleteBlog = async (id, user) => {
   const isAuthor = blog.author && blog.author.toString() === user._id.toString();
 
   if (!isUserAdmin && !isAuthor) {
-    return { error: 'FORBIDDEN', message: 'You can only delete your own blogs' };
+    return { error: 'FORBIDDEN', message: 'Only the blog owner and admin can delete this blog' };
   }
 
   await Blog.findByIdAndDelete(id);

@@ -29,7 +29,9 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        code: ['"JetBrains Mono"', 'monospace'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out forwards',

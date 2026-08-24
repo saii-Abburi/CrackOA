@@ -87,9 +87,13 @@ export default function BlogHeader({ blog, onEdit }) {
   };
 
   const handleEditClick = () => {
+    if (!user) {
+      triggerToast('Please log in to edit this article');
+      return;
+    }
     if (onEdit) {
       onEdit(blog);
-    } else if (user?.role === 'admin') {
+    } else if (user.role === 'admin') {
       navigate(`/admin/blogs?edit=${blog._id}`);
     } else {
       navigate(`/my-blogs?edit=${blog._id}`);
