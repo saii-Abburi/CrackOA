@@ -13,9 +13,9 @@ export default function TableOfContents({ sections = [], isMobile = false }) {
 
       if (Array.isArray(sections) && sections.length > 0) {
         sections.forEach((sec) => {
-          if (sec.type === 'heading' && sec.content) {
-            const text = typeof sec.content === 'string' ? sec.content : String(sec.content);
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          if (sec.type === 'heading' && (sec.content || sec.text)) {
+            const text = typeof sec.content === 'string' ? sec.content : String(sec.text || sec.content || '');
+            const id = sec.id || text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
             items.push({
               id,
               text: text.trim(),

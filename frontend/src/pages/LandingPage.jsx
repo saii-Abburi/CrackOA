@@ -1,15 +1,11 @@
 import Hero from '../components/Hero.jsx';
-import DashboardPreview from '../components/DashboardPreview.jsx';
-import CompanyStrip from '../components/CompanyStrip.jsx';
-import ProblemSection from '../components/ProblemSection.jsx';
-import SolutionSection from '../components/SolutionSection.jsx';
-import Features from '../components/Features.jsx';
+import PlatformCapabilities from '../components/landing/PlatformCapabilities.jsx';
+import ProblemSolvingExperience from '../components/landing/ProblemSolvingExperience.jsx';
+import ProgressAnalytics from '../components/landing/ProgressAnalytics.jsx';
 import CompanySection from '../components/CompanySection.jsx';
-import HowItWorks from '../components/HowItWorks.jsx';
-import Stats from '../components/Stats.jsx';
-import ProblemsPreview from '../components/ProblemsPreview.jsx';
-import ProgressSection from '../components/ProgressSection.jsx';
-import Testimonials from '../components/Testimonials.jsx';
+import CustomSheetsSection from '../components/landing/CustomSheetsSection.jsx';
+import PremiumSection from '../components/landing/PremiumSection.jsx';
+import BuiltForDevelopers from '../components/landing/BuiltForDevelopers.jsx';
 import FAQ from '../components/FAQ.jsx';
 import FinalCTA from '../components/FinalCTA.jsx';
 import SEO from '../components/SEO.jsx';
@@ -20,28 +16,24 @@ export default function LandingPage() {
     "@type": "WebSite",
     "name": "CodeRank",
     "url": typeof window !== 'undefined' ? window.location.origin : "https://coderank.dev",
-    "description": "Company-wise DSA preparation platform. Practice frequently asked coding interview questions from top tech companies.",
+    "description": "Company-wise DSA and SQL preparation platform. Practice frequently asked coding and SQL interview questions from top tech companies, track your progress, and prepare smarter.",
   };
 
   return (
     <main id="main-content">
-      <SEO 
-        title="CodeRank - Company-wise DSA Preparation & Coding Interviews"
-        description="Master data structures and algorithms with company-specific DSA sheets. Practice the most frequently asked coding interview questions at Amazon, Google, Microsoft, and more."
+      <SEO
+        title="CodeRank — Practice Company-wise DSA & SQL — Track Your Coding Progress"
+        description="Stop solving random problems. Practice company-wise DSA and SQL problems ranked by frequency, track your progress, and focus on what actually gets asked in coding interviews at Google, Amazon, Microsoft, and more."
         structuredData={structuredData}
       />
       <Hero />
-      <DashboardPreview />
-      <CompanyStrip />
-      <ProblemSection />
-      <SolutionSection />
-      <Features />
+      <PlatformCapabilities />
+      <ProblemSolvingExperience />
+      <ProgressAnalytics />
       <CompanySection />
-      <HowItWorks />
-      <Stats />
-      <ProblemsPreview />
-      <ProgressSection />
-      <Testimonials />
+      <CustomSheetsSection />
+      <PremiumSection />
+      <BuiltForDevelopers />
       <FAQ />
       <FinalCTA />
     </main>

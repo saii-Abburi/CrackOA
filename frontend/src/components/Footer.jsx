@@ -6,29 +6,34 @@ const footerLinks = {
     { label: 'Problems', href: '/problems' },
     { label: 'Companies', href: '/companies' },
     { label: 'Topics', href: '/topics' },
-    { label: 'Progress', href: '/dashboard' },
+    { label: 'Dashboard', href: '/dashboard' },
   ],
   Resources: [
-    { label: 'DSA Roadmap', href: '#' },
-    { label: 'Interview Prep', href: '#' },
-    { label: 'Blog', href: '#' },
-    { label: 'FAQ', href: '#' },
+    { label: 'Blogs', href: '/blogs' },
+    { label: 'DSA Topics', href: '/topics' },
+    { label: 'FAQ', href: '/#faq' },
   ],
   Company: [
-    { label: 'About', href: '#' },
-    { label: 'Contact', href: '#' },
-    { label: 'Privacy', href: '#' },
-    { label: 'Terms', href: '#' },
+    { label: 'About', href: '/' },
+    { label: 'Contact', href: 'mailto:hello@coderank.io', external: true },
   ],
 };
 
 const socials = [
-  { icon: GitFork, label: 'GitHub', href: '#' },
-  { icon: Link2, label: 'LinkedIn', href: '#' },
-  { icon: X, label: 'X / Twitter', href: '#' },
+  { icon: GitFork, label: 'GitHub', href: 'https://github.com' },
+  { icon: Link2, label: 'LinkedIn', href: 'https://linkedin.com' },
+  { icon: X, label: 'X / Twitter', href: 'https://x.com' },
 ];
 
 export default function Footer() {
+  const handleAnchor = (e, href) => {
+    if (href.startsWith('/#')) {
+      e.preventDefault();
+      const id = href.replace('/#', '');
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <footer className="border-t border-border bg-bg-secondary/30" role="contentinfo">
       <div className="container-xl py-16">
@@ -44,7 +49,7 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-text-secondary text-sm leading-relaxed max-w-xs">
-              Focused DSA preparation for real-world technical interviews. Practice smarter, not harder.
+              Focused DSA preparation for technical interviews. Practice company-wise problems, track progress, and prepare smarter.
             </p>
           </div>
 
@@ -55,12 +60,22 @@ export default function Footer() {
               <ul className="flex flex-col gap-2.5" role="list">
                 {links.map((link) => (
                   <li key={link.label}>
-                    <Link
-                      to={link.href}
-                      className="text-text-secondary text-sm hover:text-white transition-colors duration-200"
-                    >
-                      {link.label}
-                    </Link>
+                    {link.external ? (
+                      <a
+                        href={link.href}
+                        className="text-text-secondary text-sm hover:text-white transition-colors duration-200"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        to={link.href}
+                        onClick={(e) => handleAnchor(e, link.href)}
+                        className="text-text-secondary text-sm hover:text-white transition-colors duration-200"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -71,7 +86,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="border-t border-border pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-sm">
-            © 2026 CodeRank. Built for developers.
+            © {new Date().getFullYear()} CodeRank. Built for developers.
           </p>
 
           {/* Socials */}
@@ -80,6 +95,8 @@ export default function Footer() {
               <a
                 key={s.label}
                 href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label={s.label}
                 className="w-9 h-9 rounded-lg border border-border bg-bg-card flex items-center justify-center
                            text-text-muted hover:text-white hover:border-border-subtle hover:bg-bg-elevated

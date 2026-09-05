@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import slugify from 'slugify';
 import Blog from '../models/Blog.js';
 import Problem from '../models/Problem.js';
 import Comment from '../models/Comment.js';
@@ -6,20 +7,61 @@ import Report from '../models/Report.js';
 import User from '../models/User.js';
 
 /**
+ * Generate a unique slug from a title string.
+ * If the base slug already exists, appends -2, -3, etc. until unique.
+ * @param {string} title
+ * @param {string|null} excludeId - Blog ID to exclude (for updates)
+ * @returns {Promise<string>}
+ */
+async function generateUniqueSlug(title, excludeId = null) {
+  const baseSlug = slugify(title, { lower: true, strict: true, trim: true });
+  if (!baseSlug) throw new Error('Cannot generate slug from the provided title.');
+
+  let candidate = baseSlug;
+  let suffix = 1;
+
+  while (true) {
+    const query = { slug: candidate };
+    if (excludeId) query._id = { $ne: excludeId };
+    const existing = await Blog.findOne(query).select('_id').lean();
+    if (!existing) return candidate;
+    suffix++;
+    candidate = `${baseSlug}-${suffix}`;
+  }
+}
+
+/**
  * Get a paginated list of published blogs, with optional filtering.
  */
-export const getBlogs = async ({ page = 1, limit = 12, search, topic, difficulty, problemId }) => {
+export const getBlogs = async ({ page = 1, limit = 12, search, topic, difficulty, problemId, blogType, tag }) => {
   const skip = (page - 1) * limit;
   let problemFilter = {};
   
-  if (topic) {
+  let blogFilter = { published: true };
+
+  // Filter by blog type
+  if (blogType && blogType !== 'ALL') {
+    blogFilter.blogType = blogType;
+  }
+
+  // Filter by tag (for coding solutions with their own tags array)
+  if (tag) {
+    blogFilter.tags = tag;
+  }
+
+  // For coding solutions, difficulty is on the blog itself
+  // For general articles, difficulty comes from the linked Problem
+  if (difficulty && difficulty !== 'All') {
+    if (blogType === 'CODING_SOLUTION') {
+      blogFilter.difficulty = difficulty;
+    } else {
+      problemFilter.difficulty = difficulty;
+    }
+  }
+
+  if (topic && blogType !== 'CODING_SOLUTION') {
     problemFilter.topics = topic;
   }
-  if (difficulty && difficulty !== 'All') {
-    problemFilter.difficulty = difficulty;
-  }
-  
-  let blogFilter = { published: true };
   
   // If search is provided, search by title (using regex for simple search)
   if (search) {
@@ -181,8 +223,14 @@ export const getBlogById = async (id) => {
 export const createBlog = async (blogData, user) => {
   const isUserAdmin = user?.role === 'admin';
 
+  // Auto-generate slug from title if not provided
+  const slug = blogData.slug?.trim()
+    ? await generateUniqueSlug(blogData.slug, null)
+    : await generateUniqueSlug(blogData.title, null);
+
   const newBlogPayload = {
     ...blogData,
+    slug,
     author: user._id,
     published: isUserAdmin ? Boolean(blogData.published) : false,
   };
@@ -198,13 +246,25 @@ export const createBlog = async (blogData, user) => {
 
 /**
  * Update an existing blog.
- * Any logged in user can update any blog. Non-admin edits force the blog back to pending approval (`published = false`).
+ * Only the blog author or an admin can update a blog.
+ * Non-admin edits force the blog back to pending approval (`published = false`).
  */
 export const updateBlog = async (id, updateData, user) => {
   const blog = await Blog.findById(id);
   if (!blog) return { error: 'NOT_FOUND', message: 'Blog not found' };
 
   const isUserAdmin = user?.role === 'admin';
+  const isAuthor = blog.author && blog.author.toString() === user._id.toString();
+
+  // Ownership check: only author or admin can update
+  if (!isUserAdmin && !isAuthor) {
+    return { error: 'FORBIDDEN', message: 'You can only edit your own blogs.' };
+  }
+
+  // If slug is changing, ensure uniqueness with collision resolution
+  if (updateData.slug && updateData.slug !== blog.slug) {
+    updateData.slug = await generateUniqueSlug(updateData.slug, blog._id);
+  }
 
   // Non-admin edits force the blog back to pending approval
   if (!isUserAdmin) {

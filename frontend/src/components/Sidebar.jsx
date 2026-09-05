@@ -4,13 +4,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import {
   LayoutDashboard, Building2, Code2, Tag, TrendingUp,
   LogOut, User, Shield, Settings, ChevronLeft, ChevronRight,
-  Menu, X
+  Menu, X, Database
 } from 'lucide-react';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Building2, label: 'Companies', href: '/companies' },
   { icon: Code2, label: 'Problems', href: '/problems' },
+  { icon: Database, label: 'SQL', href: '/sql' },
   { icon: Tag, label: 'Topics', href: '/topics' },
   { icon: TrendingUp, label: 'Progress', href: '/dashboard' },
   { icon: Settings, label: 'Settings', href: '/settings' },

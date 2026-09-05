@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { fetchMyBlogs, createBlog, updateBlog, deleteBlog } from '../api/blog.api';
 import api from '../api/axiosInstance.js';
-import { Plus, Edit3, Trash2, Loader2, BookOpen, Clock, AlertCircle, CheckCircle2, ArrowLeft, Eye } from 'lucide-react';
+import { Plus, Edit3, Trash2, Loader2, BookOpen, Clock, AlertCircle, CheckCircle2, ArrowLeft, Eye, Code2 } from 'lucide-react';
 import BlogContent from '../components/blog/BlogContent';
 import BlogSectionBuilder from '../components/blog/BlogSectionBuilder';
+import CreateContentSelector from '../components/blog/CreateContentSelector';
+import CodingSolutionEditor from '../components/blog/CodingSolutionEditor';
 import { useAuth } from '../context/AuthContext';
 
 export default function UserBlogsPage() {
@@ -15,7 +17,11 @@ export default function UserBlogsPage() {
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [problems, setProblems] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Modals
+  const [isTypeSelectorOpen, setIsTypeSelectorOpen] = useState(false);
+  const [isSolutionEditorOpen, setIsSolutionEditorOpen] = useState(false);
+  const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [currentBlog, setCurrentBlog] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -24,7 +30,7 @@ export default function UserBlogsPage() {
   const [previewBlog, setPreviewBlog] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  // Form state
+  // Form state for General Articles
   const [formData, setFormData] = useState({
     title: '',
     slug: '',
@@ -47,21 +53,13 @@ export default function UserBlogsPage() {
       api.get(`/blogs/my-blogs`).then((res) => {
         const found = (res.data?.data || []).find((b) => b._id === editId);
         if (found) {
-          handleOpenModal(found);
+          handleEdit(found);
         } else {
-          // Fetch directly by ID or slug if not in my-blogs
           api.get(`/blogs/${editId}`).then((singleRes) => {
             if (singleRes.data?.data) {
-              handleOpenModal(singleRes.data.data);
+              handleEdit(singleRes.data.data);
             }
-          }).catch(() => {
-            if (user?.role === 'admin') {
-              api.get(`/admin/blogs`).then((adminRes) => {
-                const adminFound = (adminRes.data?.data || []).find((b) => b._id === editId);
-                if (adminFound) handleOpenModal(adminFound);
-              }).catch(() => {});
-            }
-          });
+          }).catch(() => {});
         }
       }).catch(() => {});
     }
@@ -88,7 +86,31 @@ export default function UserBlogsPage() {
     }
   };
 
-  const handleOpenModal = (blog = null) => {
+  const handleStartCreate = () => {
+    setCurrentBlog(null);
+    setIsTypeSelectorOpen(true);
+  };
+
+  const handleSelectContentType = (type) => {
+    setIsTypeSelectorOpen(false);
+    if (type === 'CODING_SOLUTION') {
+      setCurrentBlog(null);
+      setIsSolutionEditorOpen(true);
+    } else {
+      handleOpenArticleModal(null);
+    }
+  };
+
+  const handleEdit = (blog) => {
+    setCurrentBlog(blog);
+    if (blog.blogType === 'CODING_SOLUTION' || blog.code || blog.intuition) {
+      setIsSolutionEditorOpen(true);
+    } else {
+      handleOpenArticleModal(blog);
+    }
+  };
+
+  const handleOpenArticleModal = (blog = null) => {
     setCurrentBlog(blog);
     setError('');
     if (blog) {
@@ -114,19 +136,25 @@ export default function UserBlogsPage() {
         readingTime: 5,
       });
     }
-    setIsModalOpen(true);
+    setIsArticleModalOpen(true);
   };
 
-  const handleTitleChange = (title) => {
-    const slug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, '')
-      .replace(/\s+/g, '-');
-    setFormData((prev) => ({
-      ...prev,
-      title,
-      slug: currentBlog ? prev.slug : slug,
-    }));
+  const handleSaveSolution = async (payload) => {
+    setSaving(true);
+    setError('');
+    try {
+      if (currentBlog) {
+        await updateBlog(currentBlog._id, payload);
+      } else {
+        await createBlog(payload);
+      }
+      setIsSolutionEditorOpen(false);
+      loadMyBlogs();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to save solution');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -199,11 +227,11 @@ export default function UserBlogsPage() {
           </div>
 
           <button
-            onClick={() => handleOpenModal()}
+            onClick={handleStartCreate}
             className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 shrink-0 text-sm"
           >
             <Plus className="w-4 h-4" />
-            <span>Write New Solution</span>
+            <span>Create Content</span>
           </button>
         </div>
 
@@ -211,99 +239,129 @@ export default function UserBlogsPage() {
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center">
             <Loader2 className="w-8 h-8 text-accent animate-spin mb-4" />
-            <p className="text-text-muted text-sm">Loading your solution blogs...</p>
+            <p className="text-text-muted text-sm">Loading your submissions...</p>
           </div>
         ) : blogs.length === 0 ? (
           <div className="bg-[#121215] border border-white/10 rounded-2xl p-12 text-center space-y-4">
             <BookOpen className="w-12 h-12 text-text-muted mx-auto opacity-40" />
-            <h3 className="text-xl font-bold text-white">No solution blogs submitted yet</h3>
+            <h3 className="text-xl font-bold text-white">No submissions yet</h3>
             <p className="text-text-muted text-sm max-w-md mx-auto">
               Share your DSA insights! Write a LeetCode-style solution editorial to help developers solve problems efficiently.
             </p>
             <button
-              onClick={() => handleOpenModal()}
+              onClick={handleStartCreate}
               className="px-6 py-2.5 bg-accent text-white font-semibold rounded-xl text-sm hover:bg-accent-hover transition-all"
             >
-              Write Your First Blog
+              Create Your First Solution
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {blogs.map((blog) => (
-              <div
-                key={blog._id}
-                className="bg-[#121215] border border-white/10 rounded-2xl p-6 flex flex-col justify-between hover:border-white/20 transition-all space-y-4 shadow-md"
-              >
-                <div className="space-y-3">
-                  {/* Status Badge */}
-                  <div className="flex items-center justify-between">
-                    {blog.published ? (
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Published
+            {blogs.map((blog) => {
+              const isSolution = blog.blogType === 'CODING_SOLUTION' || Boolean(blog.code || blog.intuition || blog.approach);
+
+              return (
+                <div
+                  key={blog._id}
+                  className="bg-[#121215] border border-white/10 rounded-2xl p-6 flex flex-col justify-between hover:border-white/20 transition-all space-y-4 shadow-md"
+                >
+                  <div className="space-y-3">
+                    {/* Status & Type Badge */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          isSolution ? 'bg-accent/15 text-accent border border-accent/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                        }`}>
+                          {isSolution ? 'Solution' : 'Article'}
+                        </span>
+                        {blog.published ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Published
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            Pending
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-xs text-text-muted">
+                        {blog.readingTime || 5} min read
                       </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        Pending Approval
-                      </span>
-                    )}
-
-                    <span className="text-xs text-text-muted">
-                      {blog.readingTime || 5} min read
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-white leading-snug line-clamp-2">
-                    {blog.title}
-                  </h3>
-
-                  <p className="text-text-muted text-xs line-clamp-2">
-                    {blog.excerpt || 'No description provided.'}
-                  </p>
-
-                  {blog.problem && (
-                    <div className="pt-2 text-xs text-text-secondary flex items-center gap-1">
-                      <span className="font-semibold text-white">Problem:</span> {blog.problem.title}
                     </div>
-                  )}
-                </div>
 
-                {/* Actions */}
-                <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-                  <button
-                    onClick={() => { setPreviewBlog(blog); setIsPreviewOpen(true); }}
-                    className="text-xs text-text-muted hover:text-white flex items-center gap-1 transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Preview</span>
-                  </button>
+                    <h3 className="text-lg font-bold text-white leading-snug line-clamp-2">
+                      {blog.title}
+                    </h3>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleOpenModal(blog)}
-                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-all"
-                      title="Edit Blog"
+                    <p className="text-text-muted text-xs line-clamp-2">
+                      {blog.excerpt || blog.intuition || 'No description provided.'}
+                    </p>
+
+                    {blog.platform && (
+                      <div className="pt-1 text-xs text-text-secondary">
+                        <span className="font-semibold text-white">Platform:</span> {blog.platform}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+                    <Link
+                      to={`/blogs/${blog.slug}`}
+                      className="text-xs text-text-muted hover:text-white flex items-center gap-1 transition-colors"
                     >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(blog._id)}
-                      className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
-                      title="Delete Blog"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View</span>
+                    </Link>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEdit(blog)}
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-all"
+                        title="Edit"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(blog._id)}
+                        className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Editor Modal */}
-      {isModalOpen && (
+      {/* 1. Content Type Choice Modal */}
+      {isTypeSelectorOpen && (
+        <CreateContentSelector
+          onSelect={handleSelectContentType}
+          onClose={() => setIsTypeSelectorOpen(false)}
+        />
+      )}
+
+      {/* 2. Coding Solution Dedicated Editor Modal */}
+      {isSolutionEditorOpen && (
+        <CodingSolutionEditor
+          blog={currentBlog}
+          saving={saving}
+          error={error}
+          onSave={handleSaveSolution}
+          onClose={() => setIsSolutionEditorOpen(false)}
+        />
+      )}
+
+      {/* 3. General Article Section Builder Modal */}
+      {isArticleModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#121215] border border-white/15 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
             
@@ -311,14 +369,14 @@ export default function UserBlogsPage() {
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#1A1A20]">
               <div>
                 <h2 className="text-xl font-bold text-white">
-                  {currentBlog ? 'Edit Solution Blog' : 'Write New Solution Blog'}
+                  {currentBlog ? 'Edit General Article' : 'Write General Article'}
                 </h2>
                 <p className="text-xs text-text-muted">
                   Saving will submit the article for admin approval.
                 </p>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => setIsArticleModalOpen(false)}
                 className="text-text-muted hover:text-white text-lg font-bold px-3 py-1"
               >
                 ✕
@@ -343,8 +401,8 @@ export default function UserBlogsPage() {
                     type="text"
                     required
                     value={formData.title}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder="e.g. Optimal 2-Pointer Approach for Two Sum"
+                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g. Optimal Approach for Two Sum"
                     className="w-full bg-bg-card border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-accent focus:outline-none"
                   />
                 </div>
@@ -367,15 +425,14 @@ export default function UserBlogsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2">
-                    Associated DSA Problem *
+                    Associated DSA Problem (Optional)
                   </label>
                   <select
-                    required
                     value={formData.problem}
                     onChange={(e) => setFormData((prev) => ({ ...prev, problem: e.target.value }))}
                     className="w-full bg-bg-card border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-accent focus:outline-none"
                   >
-                    <option value="">Select a problem...</option>
+                    <option value="">None / Standalone</option>
                     {problems.map((p) => (
                       <option key={p._id} value={p._id}>
                         {p.leetcodeId ? `#${p.leetcodeId} - ` : ''}{p.title} ({p.difficulty})
@@ -428,7 +485,7 @@ export default function UserBlogsPage() {
               <div className="pt-4 border-t border-white/10 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => setIsArticleModalOpen(false)}
                   className="px-4 py-2 text-text-muted hover:text-white text-sm"
                 >
                   Cancel
@@ -440,7 +497,7 @@ export default function UserBlogsPage() {
                   className="px-6 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold rounded-xl text-sm transition-all flex items-center gap-2"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{currentBlog ? 'Submit Edits for Review' : 'Submit Solution Blog'}</span>
+                  <span>{currentBlog ? 'Submit Edits for Review' : 'Submit General Article'}</span>
                 </button>
               </div>
             </form>

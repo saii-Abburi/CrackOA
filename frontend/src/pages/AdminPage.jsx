@@ -30,7 +30,7 @@ const SAMPLE_CSV = `ID,Title,Acceptance,Difficulty,Frequency,Leetcode Question L
 53,Maximum Subarray,49.5%,Medium,85.3%,https://leetcode.com/problems/maximum-subarray/,"Array, Dynamic Programming","Amazon, Apple, Microsoft, Google"`;
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('csv'); // 'csv' | 'companies' | 'problems' | 'stats'
+  const [activeTab, setActiveTab] = useState('csv'); // 'csv' | 'companies' | 'problems' | 'sql' | 'stats'
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -63,6 +63,22 @@ export default function AdminPage() {
     frequency: 70, leetcodeUrl: '', topics: '', companies: '', description: ''
   });
 
+  // SQL Problems Tab State
+  const [sqlList, setSqlList] = useState([]);
+  const [sqlLoading, setSqlLoading] = useState(false);
+  const [sqlSearch, setSqlSearch] = useState('');
+  const [sqlDifficulty, setSqlDifficulty] = useState('All');
+  const [sqlPage, setSqlPage] = useState(1);
+  const [sqlPagination, setSqlPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [showAddSqlModal, setShowAddSqlModal] = useState(false);
+  const [newSqlProblem, setNewSqlProblem] = useState({
+    title: '', difficulty: 'Medium', topics: '', description: '',
+    sqlMeta: {
+      schemaDescription: '', expectedOutput: '', explanation: '',
+      referenceQuery: '', constraints: '', sampleTables: '', testCases: ''
+    }
+  });
+
   // Fetch system stats
   const fetchStats = async () => {
     setStatsLoading(true);
@@ -89,27 +105,38 @@ export default function AdminPage() {
     }
   };
 
-  // Fetch Problems
+  // Fetch DSA Problems
   const fetchProblems = async () => {
     setProblemLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: problemPage,
-        limit: 20,
-      });
+      const params = new URLSearchParams({ page: problemPage, limit: 20, domain: 'dsa' });
       if (problemDifficulty !== 'All') params.set('difficulty', problemDifficulty);
       if (problemCompanyFilter !== 'All') params.set('company', problemCompanyFilter);
       if (problemSearch) params.set('search', problemSearch);
-
       const res = await api.get(`/problems?${params.toString()}`);
       setProblemsList(res.data.data.problems || res.data.data || []);
-      if (res.data.pagination) {
-        setProblemPagination(res.data.pagination);
-      }
+      if (res.data.pagination) setProblemPagination(res.data.pagination);
     } catch (err) {
       console.error('Failed to fetch problems:', err);
     } finally {
       setProblemLoading(false);
+    }
+  };
+
+  // Fetch SQL Problems
+  const fetchSqlProblems = async () => {
+    setSqlLoading(true);
+    try {
+      const params = new URLSearchParams({ page: sqlPage, limit: 20, domain: 'sql' });
+      if (sqlDifficulty !== 'All') params.set('difficulty', sqlDifficulty);
+      if (sqlSearch) params.set('search', sqlSearch);
+      const res = await api.get(`/problems?${params.toString()}`);
+      setSqlList(res.data.data.problems || res.data.data || []);
+      if (res.data.pagination) setSqlPagination(res.data.pagination);
+    } catch (err) {
+      console.error('Failed to fetch SQL problems:', err);
+    } finally {
+      setSqlLoading(false);
     }
   };
 
@@ -123,10 +150,18 @@ export default function AdminPage() {
     return () => clearTimeout(timer);
   }, [problemPage, problemSearch, problemDifficulty, problemCompanyFilter]);
 
-  // Reset page when filters change
   useEffect(() => {
     setProblemPage(1);
   }, [problemSearch, problemDifficulty, problemCompanyFilter]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchSqlProblems, 250);
+    return () => clearTimeout(timer);
+  }, [sqlPage, sqlSearch, sqlDifficulty]);
+
+  useEffect(() => {
+    setSqlPage(1);
+  }, [sqlSearch, sqlDifficulty]);
 
   // Parse CSV text whenever it changes
   const handleParseCsv = (text) => {
@@ -231,11 +266,12 @@ export default function AdminPage() {
     }
   };
 
-  // Add Problem
+  // Add DSA Problem
   const handleCreateProblem = async (e) => {
     e.preventDefault();
     try {
       const payload = {
+        domain: 'dsa',
         ...newProblem,
         leetcodeId: Number(newProblem.leetcodeId),
         topics: newProblem.topics ? newProblem.topics.split(',').map((t) => t.trim()) : [],
@@ -243,15 +279,35 @@ export default function AdminPage() {
       };
       await createProblemApi(payload);
       setShowAddProblemModal(false);
-      setNewProblem({
-        leetcodeId: '', title: '', difficulty: 'Medium', acceptanceRate: 50,
-        frequency: 70, leetcodeUrl: '', topics: '', companies: '', description: ''
-      });
-      fetchProblems();
-      fetchStats();
-    } catch (err) {
-      alert(err.message);
-    }
+      setNewProblem({ leetcodeId: '', title: '', difficulty: 'Medium', acceptanceRate: 50, frequency: 70, leetcodeUrl: '', topics: '', companies: '', description: '' });
+      fetchProblems(); fetchStats();
+    } catch (err) { alert(err.message); }
+  };
+
+  // Add SQL Problem
+  const handleCreateSqlProblem = async (e) => {
+    e.preventDefault();
+    try {
+      const meta = newSqlProblem.sqlMeta;
+      const payload = {
+        domain: 'sql',
+        title: newSqlProblem.title,
+        difficulty: newSqlProblem.difficulty,
+        topics: newSqlProblem.topics ? newSqlProblem.topics.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        description: newSqlProblem.description,
+        sqlMeta: {
+          schemaDescription: meta.schemaDescription || null,
+          expectedOutput: meta.expectedOutput || null,
+          explanation: meta.explanation || null,
+          referenceQuery: meta.referenceQuery || null,
+          constraints: meta.constraints ? meta.constraints.split('\n').map((c) => c.trim()).filter(Boolean) : [],
+        },
+      };
+      await createProblemApi(payload);
+      setShowAddSqlModal(false);
+      setNewSqlProblem({ title: '', difficulty: 'Medium', topics: '', description: '', sqlMeta: { schemaDescription: '', expectedOutput: '', explanation: '', referenceQuery: '', constraints: '', sampleTables: '', testCases: '' } });
+      fetchSqlProblems(); fetchStats();
+    } catch (err) { alert(err.message); }
   };
 
   // Delete Problem
@@ -304,10 +360,10 @@ export default function AdminPage() {
         {/* System Overview Stats Banner */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Total Problems', value: stats?.totalProblems ?? '...', icon: Code2, color: 'text-accent' },
-            { label: 'Companies', value: stats?.totalCompanies ?? '...', icon: Building2, color: 'text-sky-400' },
+            { label: 'DSA Problems', value: stats?.totalDsaProblems ?? stats?.totalProblems ?? '...', icon: Code2, color: 'text-accent' },
+            { label: 'SQL Problems', value: stats?.totalSqlProblems ?? '...', icon: Database, color: 'text-indigo-400' },
             { label: 'Registered Users', value: stats?.totalUsers ?? '...', icon: Users, color: 'text-emerald-400' },
-            { label: 'Progress Records', value: stats?.totalProgress ?? '...', icon: Database, color: 'text-amber-400' },
+            { label: 'Progress Records', value: stats?.totalProgress ?? '...', icon: Building2, color: 'text-amber-400' },
           ].map((item) => (
             <div key={item.label} className="bg-bg-card border border-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-2">
@@ -326,8 +382,9 @@ export default function AdminPage() {
           {[
             { id: 'csv', label: 'CSV Sheet Importer', icon: Upload },
             { id: 'companies', label: `Companies (${companiesList.length})`, icon: Building2 },
-            { id: 'problems', label: `Problems (${problemsList.length})`, icon: Code2 },
-            { id: 'stats', label: 'Overview & Health', icon: Database },
+            { id: 'problems', label: `DSA Problems (${problemPagination.total || 0})`, icon: Code2 },
+            { id: 'sql', label: `SQL Problems (${sqlPagination.total || 0})`, icon: Database },
+            { id: 'stats', label: 'Overview & Health', icon: Users },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -778,7 +835,67 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB 4: SYSTEM STATS & OVERVIEW */}
+        {/* TAB 4: SQL PROBLEM MANAGEMENT */}
+        {activeTab === 'sql' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Database className="w-5 h-5 text-indigo-400" /> SQL Problems
+                </h2>
+                <p className="text-text-muted text-xs mt-1">Create and manage SQL practice problems with schema, expected output, and explanation.</p>
+              </div>
+              <button onClick={() => setShowAddSqlModal(true)} className="btn-primary text-xs py-2 px-4 shrink-0 bg-indigo-600 hover:bg-indigo-500">
+                <Plus className="w-4 h-4" /> Add SQL Problem
+              </button>
+            </div>
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                <input type="text" placeholder="Search SQL problems..." value={sqlSearch} onChange={(e) => setSqlSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-bg-card border border-border rounded-xl text-white text-xs placeholder:text-text-muted focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div className="flex items-center gap-2">
+                {['All','Easy','Medium','Hard'].map((diff) => (
+                  <button key={diff} onClick={() => setSqlDifficulty(diff)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 ${sqlDifficulty === diff ? 'bg-indigo-600 text-white' : 'bg-bg-card border border-border text-text-secondary hover:text-white'}`}>
+                    {diff}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {sqlLoading ? (
+              <div className="py-20 flex flex-col items-center justify-center bg-bg-card border border-border rounded-2xl">
+                <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
+                <p className="text-text-muted text-sm">Fetching SQL problems...</p>
+              </div>
+            ) : sqlList.length === 0 ? (
+              <div className="py-20 flex flex-col items-center justify-center bg-bg-card border border-border rounded-2xl gap-3">
+                <Database className="w-12 h-12 text-indigo-500/30" />
+                <p className="text-text-muted text-sm">No SQL problems yet. Click "Add SQL Problem" to create one!</p>
+              </div>
+            ) : (
+              <div className="bg-bg-card border border-border rounded-2xl overflow-hidden">
+                <div className="divide-y divide-border">
+                  {sqlList.map((p) => (
+                    <div key={p._id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_6rem_8rem_4rem_3rem] gap-4 px-5 py-3.5 items-center hover:bg-bg-elevated/30 transition-colors">
+                      <p className="text-sm font-medium text-white truncate">{p.title}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border w-fit ${p.difficulty === 'Easy' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30' : p.difficulty === 'Medium' ? 'text-amber-400 bg-amber-400/10 border-amber-400/30' : 'text-red-400 bg-red-400/10 border-red-400/30'}`}>{p.difficulty}</span>
+                      <span className="text-xs text-text-muted truncate hidden sm:block">{p.topics?.[0] || '—'}</span>
+                      <a href={`/sql/${p.slug || p._id}`} target="_blank" rel="noreferrer"
+                        className="hidden sm:inline-flex text-[11px] font-semibold px-2 py-1 rounded-lg bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all">
+                        View →
+                      </a>
+                      <button onClick={() => handleDeleteProblem(p._id)} className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: SYSTEM STATS & OVERVIEW */}
         {activeTab === 'stats' && (
           <div className="space-y-6">
             <div className="bg-bg-card border border-border rounded-2xl p-6">
@@ -932,6 +1049,79 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* ADD SQL PROBLEM MODAL */}
+      {showAddSqlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-bg-card border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Database className="w-5 h-5 text-indigo-400" /> Add SQL Problem
+              </h3>
+              <button onClick={() => setShowAddSqlModal(false)} className="text-text-muted hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateSqlProblem} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Title *</label>
+                  <input type="text" required value={newSqlProblem.title} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, title: e.target.value })}
+                    placeholder="e.g. Second Highest Salary" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Difficulty *</label>
+                  <select value={newSqlProblem.difficulty} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, difficulty: e.target.value })}
+                    className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500">
+                    <option>Easy</option><option>Medium</option><option>Hard</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Topics (comma-separated)</label>
+                <input type="text" value={newSqlProblem.topics} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, topics: e.target.value })}
+                  placeholder="SELECT, GROUP BY, HAVING" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Problem Description (HTML/text)</label>
+                <textarea rows={3} value={newSqlProblem.description} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, description: e.target.value })}
+                  placeholder="Write the problem statement here..." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Schema Description (CREATE TABLE / DDL)</label>
+                <textarea rows={4} value={newSqlProblem.sqlMeta.schemaDescription} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, schemaDescription: e.target.value } })}
+                  placeholder="CREATE TABLE Employee (id INT, salary INT);" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Expected Output</label>
+                <textarea rows={3} value={newSqlProblem.sqlMeta.expectedOutput} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, expectedOutput: e.target.value } })}
+                  placeholder="+--------+\n| salary |\n+--------+\n|    200 |\n+--------+" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Explanation</label>
+                <textarea rows={3} value={newSqlProblem.sqlMeta.explanation} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, explanation: e.target.value } })}
+                  placeholder="Explain how the correct query works..." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 resize-y" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Reference Query (Admin only — not shown to users)</label>
+                <textarea rows={3} value={newSqlProblem.sqlMeta.referenceQuery} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, referenceQuery: e.target.value } })}
+                  placeholder="SELECT MAX(salary) FROM Employee WHERE salary != (SELECT MAX(salary) FROM Employee);" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Constraints (one per line)</label>
+                <textarea rows={2} value={newSqlProblem.sqlMeta.constraints} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, constraints: e.target.value } })}
+                  placeholder="Table will have at least one row.&#10;salary values are unique." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setShowAddSqlModal(false)} className="btn-secondary text-xs flex-1 py-2">Cancel</button>
+                <button type="submit" className="text-xs flex-1 py-2 justify-center bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-colors">
+                  Create SQL Problem
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

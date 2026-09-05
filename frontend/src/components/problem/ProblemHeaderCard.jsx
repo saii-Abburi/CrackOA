@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, CheckCircle2, Share2, RefreshCw, Building2, Tag } from 'lucide-react';
+import { Bookmark, CheckCircle2, Share2, RefreshCw, Building2, Tag, Loader2 } from 'lucide-react';
 import { syncProblemWithLeetCodeApi } from '../../api/problem.api';
+import { upsertProgress, deleteProgress, fetchUserProgress } from '../../api/progress.api';
+import { useAuth } from '../../context/AuthContext';
 
 // Radial Accuracy Ring Gauge
 const AnimatedAccuracyGauge = ({ percentage = 0 }) => {
@@ -53,14 +55,37 @@ const DifficultyBadge = ({ difficulty = 'Medium' }) => {
 };
 
 export default function ProblemHeaderCard({ problem: initialProblem, onProblemUpdated }) {
+  const { isAuthenticated } = useAuth();
   const [problem, setProblem] = useState(initialProblem);
   const [syncing, setSyncing] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [solved, setSolved] = useState(false);
+  const [togglingProgress, setTogglingProgress] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setProblem(initialProblem);
   }, [initialProblem]);
+
+  // Check solved status from backend on mount / problem change
+  useEffect(() => {
+    if (!isAuthenticated || !problem?._id) return;
+    let isMounted = true;
+    fetchUserProgress()
+      .then((records) => {
+        if (!isMounted || !Array.isArray(records)) return;
+        const isProblemSolved = records.some((r) => {
+          if (r?.status !== 'solved') return false;
+          const pId = typeof r.problem === 'object' ? r.problem?._id : r.problem;
+          return String(pId) === String(problem._id);
+        });
+        setSolved(isProblemSolved);
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, problem?._id]);
 
   if (!problem) return null;
 
@@ -98,6 +123,25 @@ export default function ProblemHeaderCard({ problem: initialProblem, onProblemUp
     }
   };
 
+  const handleToggleSolved = async () => {
+    if (!isAuthenticated || !problem?._id || togglingProgress) return;
+    const nextSolved = !solved;
+    setSolved(nextSolved);
+    setTogglingProgress(true);
+    try {
+      if (nextSolved) {
+        await upsertProgress(problem._id, { status: 'solved' });
+      } else {
+        await deleteProgress(problem._id);
+      }
+    } catch (e) {
+      console.error('Failed to update progress:', e);
+      setSolved(!nextSolved); // Revert on failure
+    } finally {
+      setTogglingProgress(false);
+    }
+  };
+
   return (
     <div className="space-y-4 mb-6">
       {/* Title & Toolbar Row */}
@@ -117,12 +161,18 @@ export default function ProblemHeaderCard({ problem: initialProblem, onProblemUp
         {/* Quick Actions */}
         <div className="flex items-center gap-1.5 self-start sm:self-auto bg-[#161b22] p-1 rounded-lg border border-[#30363d] shrink-0">
           <button
-            onClick={() => setSolved(!solved)}
+            onClick={handleToggleSolved}
+            disabled={togglingProgress}
             className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-all ${
               solved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            } ${togglingProgress ? 'opacity-70 cursor-wait' : ''}`}
+            title={solved ? "Mark as unsolved" : "Mark as solved"}
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
+            {togglingProgress ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            )}
             <span>{solved ? 'Solved' : 'Mark Solved'}</span>
           </button>
 

@@ -42,8 +42,7 @@ const blogSchema = new mongoose.Schema(
     problem: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Problem',
-      required: [true, 'A blog must be associated with a problem'],
-      unique: true, // Assuming one primary blog per problem
+      default: null,
     },
     excerpt: {
       type: String,
@@ -92,6 +91,62 @@ const blogSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+
+    // ── Coding Solution Fields ──────────────────────────────────────────
+    blogType: {
+      type: String,
+      enum: ['GENERAL_ARTICLE', 'CODING_SOLUTION'],
+      default: 'GENERAL_ARTICLE',
+    },
+    platform: {
+      type: String,
+      enum: ['LeetCode', 'GeeksforGeeks', 'Codeforces', 'HackerRank', 'CodeChef', 'Other'],
+      default: null,
+    },
+    problemUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    difficulty: {
+      type: String,
+      enum: ['Easy', 'Medium', 'Hard'],
+      default: null,
+    },
+    intuition: {
+      type: String,
+      default: null,
+    },
+    approach: {
+      type: String,
+      default: null,
+    },
+    timeComplexity: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    spaceComplexity: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    code: {
+      type: String,
+      default: null,
+    },
+    codeLanguage: {
+      type: String,
+      default: 'cpp',
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
+    rawMarkdown: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -105,12 +160,13 @@ const blogSchema = new mongoose.Schema(
 );
 
 // Indexes
-// Note: slug and problem are already uniquely indexed by unique: true
 blogSchema.index({ published: 1 });
 blogSchema.index({ publishedAt: -1 });
-
-// Note: Topics and Difficulty are not included here as per instructions, 
-// they will be populated from the associated Problem.
+blogSchema.index({ author: 1, createdAt: -1 });
+blogSchema.index({ blogType: 1, published: 1, publishedAt: -1 });
+blogSchema.index({ difficulty: 1 });
+blogSchema.index({ platform: 1 });
+blogSchema.index({ tags: 1 });
 
 const Blog = mongoose.model('Blog', blogSchema);
 

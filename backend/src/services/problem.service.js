@@ -7,6 +7,7 @@ import { fetchLeetCodeQuestionDetails } from './leetcode.service.js';
 
 /**
  * Get all problems with filtering, searching, sorting, and pagination.
+ * Supports `domain` param: 'dsa' | 'sql' | 'all' (default: all)
  */
 export const getAllProblems = async (query) => {
   const {
@@ -16,6 +17,7 @@ export const getAllProblems = async (query) => {
     search,
     topic,
     company,
+    domain,        // new: 'dsa' | 'sql' | 'all'
     sort = 'frequency',
     order = 'desc',
   } = query;
@@ -26,14 +28,26 @@ export const getAllProblems = async (query) => {
 
   const filter = {};
 
+  // ── Domain filter ──────────────────────────────────────────────────────────
+  if (domain && domain !== 'all') {
+    if (domain === 'sql') {
+      filter.domain = 'sql';
+    } else if (domain === 'dsa') {
+      filter.domain = { $ne: 'sql' };
+    }
+  }
+
+  // ── Difficulty filter ──────────────────────────────────────────────────────
   if (difficulty && ['Easy', 'Medium', 'Hard'].includes(difficulty)) {
     filter.difficulty = difficulty;
   }
 
+  // ── Topic filter ───────────────────────────────────────────────────────────
   if (topic) {
     filter.topics = { $in: [topic] };
   }
 
+  // ── Search filter (title or leetcodeId for DSA, title-only for SQL) ────────
   if (search) {
     filter.$or = [
       { title: { $regex: search, $options: 'i' } },
@@ -41,6 +55,7 @@ export const getAllProblems = async (query) => {
     ];
   }
 
+  // ── Company filter (DSA only) ──────────────────────────────────────────────
   if (company) {
     const companyDoc = await Company.findOne({ slug: company }).lean();
     if (companyDoc) {
@@ -48,14 +63,14 @@ export const getAllProblems = async (query) => {
     }
   }
 
-  const allowedSortFields = ['frequency', 'difficulty', 'acceptanceRate', 'title', 'leetcodeId'];
+  const allowedSortFields = ['frequency', 'difficulty', 'acceptanceRate', 'title', 'leetcodeId', 'createdAt'];
   const sortField = allowedSortFields.includes(sort) ? sort : 'frequency';
   const sortOrder = order === 'asc' ? 1 : -1;
   const sortObj = { [sortField]: sortOrder };
 
   const [problems, total] = await Promise.all([
     Problem.find(filter)
-      .select('-description')
+      .select('-description -sqlMeta.referenceQuery') // hide internal fields in list view
       .populate('companies', 'name slug logo')
       .sort(sortObj)
       .skip(skip)
@@ -69,25 +84,29 @@ export const getAllProblems = async (query) => {
 
 /**
  * Get a single problem by MongoDB ID, leetcodeId, or slug.
- * Auto-fetches description & acceptance rate from LeetCode if missing.
+ * For DSA problems: auto-fetches description & acceptance rate from LeetCode if missing.
+ * For SQL problems: returns document as-is (sqlMeta included, referenceQuery excluded).
  */
 export const getProblemById = async (id) => {
   let problem;
 
   if (mongoose.Types.ObjectId.isValid(id)) {
     problem = await Problem.findById(id)
+      .select('-sqlMeta.referenceQuery')
       .populate('companies', 'name slug logo')
       .lean();
   }
 
   if (!problem && !isNaN(Number(id))) {
     problem = await Problem.findOne({ leetcodeId: Number(id) })
+      .select('-sqlMeta.referenceQuery')
       .populate('companies', 'name slug logo')
       .lean();
   }
 
   if (!problem && typeof id === 'string') {
     problem = await Problem.findOne({ slug: id })
+      .select('-sqlMeta.referenceQuery')
       .populate('companies', 'name slug logo')
       .lean();
   }
@@ -99,8 +118,9 @@ export const getProblemById = async (id) => {
     throw error;
   }
 
-  // Auto-enrich if description or acceptanceRate is missing
-  if (!problem.description || !problem.acceptanceRate) {
+  // Auto-enrich DSA problems from LeetCode if description or acceptanceRate is missing.
+  // SQL problems skip this step.
+  if (problem.domain !== 'sql' && (!problem.description || !problem.acceptanceRate)) {
     try {
       const syncedProblem = await syncProblemFromLeetCode(problem._id);
       if (syncedProblem) {
@@ -124,13 +144,14 @@ export const getProblemCompanies = async (id) => {
 
 /**
  * Create a new problem (admin).
- * Also updates totalProblems counter on associated companies.
+ * For DSA problems: also updates totalProblems counter on associated companies.
+ * For SQL problems: skips company counter update.
  */
 export const createProblem = async (data) => {
   const problem = await Problem.create(data);
 
-  // Increment totalProblems on each associated company
-  if (problem.companies && problem.companies.length > 0) {
+  // DSA problems may be associated with companies — keep their counts updated.
+  if (problem.domain !== 'sql' && problem.companies && problem.companies.length > 0) {
     await Company.updateMany(
       { _id: { $in: problem.companies } },
       { $inc: { totalProblems: 1 } }
@@ -142,7 +163,7 @@ export const createProblem = async (data) => {
 
 /**
  * Update a problem by ID (admin).
- * Recalculates company totalProblems if companies changed.
+ * Recalculates company totalProblems if companies changed on DSA problems.
  */
 export const updateProblem = async (id, data) => {
   const existing = await Problem.findById(id);
@@ -153,8 +174,8 @@ export const updateProblem = async (id, data) => {
     throw error;
   }
 
-  // Handle company array changes
-  if (data.companies) {
+  // Handle company array changes for DSA problems only
+  if (existing.domain !== 'sql' && data.companies) {
     const oldCompanyIds = existing.companies.map(String);
     const newCompanyIds = data.companies.map(String);
 
@@ -189,8 +210,8 @@ export const deleteProblem = async (id) => {
     throw error;
   }
 
-  // Decrement totalProblems for each associated company
-  if (problem.companies && problem.companies.length > 0) {
+  // Decrement totalProblems for each associated company (DSA only)
+  if (problem.domain !== 'sql' && problem.companies && problem.companies.length > 0) {
     await Company.updateMany(
       { _id: { $in: problem.companies } },
       { $inc: { totalProblems: -1 } }
@@ -206,6 +227,7 @@ export const deleteProblem = async (id) => {
  * Flexibly handles headers like: ID, Title, Acceptance, Difficulty, Frequency, Leetcode Question Link, Company, Topics
  * Supports targetCompany override to import sheets under a specific company.
  * Optimised with MongoDB bulkWrite to process 400+ rows in milliseconds.
+ * All bulk-imported problems default to domain='dsa' (existing behaviour).
  */
 export const bulkImportProblems = async (problemsData, targetCompany = null) => {
   let createdCount = 0;
@@ -280,7 +302,7 @@ export const bulkImportProblems = async (problemsData, targetCompany = null) => 
 
   // Pre-fetch all existing problem IDs for fast map lookup
   const existingProblems = await Problem.find({}, { _id: 1, leetcodeId: 1 }).lean();
-  const existingMap = new Map(existingProblems.map((p) => [p.leetcodeId, p._id]));
+  const existingMap = new Map(existingProblems.filter(p => p.leetcodeId).map((p) => [p.leetcodeId, p._id]));
 
   const bulkOps = [];
 
@@ -387,6 +409,7 @@ export const bulkImportProblems = async (problemsData, targetCompany = null) => 
       }
 
       const payload = {
+        domain: 'dsa', // bulk import always creates DSA problems
         leetcodeId,
         title,
         slug: slugVal,
@@ -446,8 +469,9 @@ export const bulkImportProblems = async (problemsData, targetCompany = null) => 
     await Problem.bulkWrite(bulkOps);
   }
 
-  // Recalculate company problem counts
+  // Recalculate company problem counts (DSA only)
   const companyCounts = await Problem.aggregate([
+    { $match: { domain: { $ne: 'sql' } } },
     { $unwind: '$companies' },
     { $group: { _id: '$companies', count: { $sum: 1 } } },
   ]);
@@ -476,6 +500,7 @@ export const bulkImportProblems = async (problemsData, targetCompany = null) => 
 
 /**
  * Fetch and sync problem data (problem statement, acceptance rate, snippets, hints) from LeetCode GraphQL.
+ * Only applies to DSA (domain='dsa') problems.
  * @param {string} id - MongoDB ID, leetcodeId, or slug
  */
 export const syncProblemFromLeetCode = async (id) => {
@@ -493,6 +518,14 @@ export const syncProblemFromLeetCode = async (id) => {
     const error = new Error('Problem not found to sync.');
     error.statusCode = 404;
     error.code = 'PROBLEM_NOT_FOUND';
+    throw error;
+  }
+
+  // SQL problems cannot be synced from LeetCode
+  if (problem.domain === 'sql') {
+    const error = new Error('LeetCode sync is not available for SQL problems.');
+    error.statusCode = 400;
+    error.code = 'UNSUPPORTED_OPERATION';
     throw error;
   }
 
@@ -521,10 +554,11 @@ export const syncProblemFromLeetCode = async (id) => {
 };
 
 /**
- * Sync all problems in database with LeetCode GraphQL (Admin)
+ * Sync all DSA problems in database with LeetCode GraphQL (Admin)
  */
 export const syncAllProblemsFromLeetCode = async () => {
-  const problems = await Problem.find({}, { _id: 1, slug: 1, title: 1, leetcodeId: 1 }).lean();
+  // Only sync DSA problems
+  const problems = await Problem.find({ domain: { $ne: 'sql' } }, { _id: 1, slug: 1, title: 1, leetcodeId: 1 }).lean();
   let successCount = 0;
   let failCount = 0;
   const errors = [];
@@ -549,6 +583,7 @@ export const syncAllProblemsFromLeetCode = async () => {
 
 /**
  * Execute code against test cases (Run Code)
+ * For SQL problems: returns a simulated result showing expected vs user query.
  */
 export const runCode = async (problemId, { language, code, testCases }) => {
   const problem = await Problem.findById(problemId).catch(() => null) ||
@@ -572,7 +607,29 @@ export const runCode = async (problemId, { language, code, testCases }) => {
     };
   }
 
-  // Simulate realistic execution evaluation with high-precision runtime and memory metrics
+  // ── SQL-specific simulation ──────────────────────────────────────────────
+  if (problem.domain === 'sql') {
+    const sqlTestCases = problem.sqlMeta?.testCases || [];
+    const caseCount = sqlTestCases.length || 1;
+    return {
+      status: 'Accepted',
+      runtime: Math.floor(Math.random() * 20) + 5,
+      memory: parseFloat((Math.random() * 2 + 1.2).toFixed(1)),
+      passedTestCases: caseCount,
+      totalTestCases: caseCount,
+      testCases: sqlTestCases.map((tc) => ({
+        input: tc.inputData || 'Sample table data',
+        expectedOutput: tc.expectedOutput || problem.sqlMeta?.expectedOutput || '(See expected output tab)',
+        actualOutput: tc.expectedOutput || problem.sqlMeta?.expectedOutput || '(Simulated)',
+        passed: true,
+        description: tc.description || '',
+      })),
+      stdout: 'SQL query executed against sample data.',
+      sqlNote: 'Live SQL execution sandbox coming soon — results are simulated.',
+    };
+  }
+
+  // ── DSA simulation ────────────────────────────────────────────────────────
   const runtime = Math.floor(Math.random() * 35) + 25; // 25ms - 60ms
   const memory = parseFloat((Math.random() * 4 + 14.2).toFixed(1)); // 14.2MB - 18.2MB
   const cases = Array.isArray(testCases) && testCases.length > 0 ? testCases : [
@@ -598,7 +655,8 @@ export const runCode = async (problemId, { language, code, testCases }) => {
 };
 
 /**
- * Submit solution code, record Submission in DB, and update UserProgress
+ * Submit solution code, record Submission in DB, and update UserProgress.
+ * Works for both DSA and SQL problems.
  */
 export const submitCode = async (userId, problemId, { language = 'cpp', code }) => {
   const Submission = (await import('../models/Submission.js')).default;
@@ -619,8 +677,13 @@ export const submitCode = async (userId, problemId, { language = 'cpp', code }) 
     throw error;
   }
 
-  const runtime = Math.floor(Math.random() * 30) + 28;
-  const memory = parseFloat((Math.random() * 3 + 14.5).toFixed(1));
+  const isSql = problem.domain === 'sql';
+  const runtime = isSql
+    ? Math.floor(Math.random() * 15) + 5
+    : Math.floor(Math.random() * 30) + 28;
+  const memory = isSql
+    ? parseFloat((Math.random() * 1 + 0.8).toFixed(1))
+    : parseFloat((Math.random() * 3 + 14.5).toFixed(1));
   const beatsRuntime = parseFloat((85.0 + Math.random() * 12).toFixed(1));
   const beatsMemory = parseFloat((70.0 + Math.random() * 20).toFixed(1));
 
@@ -628,13 +691,13 @@ export const submitCode = async (userId, problemId, { language = 'cpp', code }) 
   const submission = await Submission.create({
     user: userId,
     problem: problem._id,
-    language,
+    language: isSql ? 'sql' : language,
     code,
     status: 'Accepted',
     runtime,
     memory,
-    passedTestCases: 3,
-    totalTestCases: 3,
+    passedTestCases: isSql ? (problem.sqlMeta?.testCases?.length || 1) : 3,
+    totalTestCases: isSql ? (problem.sqlMeta?.testCases?.length || 1) : 3,
   });
 
   // Update user progress to solved
@@ -653,9 +716,10 @@ export const submitCode = async (userId, problemId, { language = 'cpp', code }) 
     memory,
     beatsRuntime,
     beatsMemory,
-    passedTestCases: 3,
-    totalTestCases: 3,
-    createdAt: submission.createdAt
+    passedTestCases: submission.passedTestCases,
+    totalTestCases: submission.totalTestCases,
+    createdAt: submission.createdAt,
+    ...(isSql && { sqlNote: 'Live SQL execution sandbox coming soon — results are simulated.' }),
   };
 };
 
@@ -677,6 +741,3 @@ export const getSubmissions = async (userId, problemId) => {
     .limit(20)
     .lean();
 };
-
-
-

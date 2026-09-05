@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { fetchDashboard } from '../api/progress.api.js';
 import {
   CheckCircle2, Clock, ChevronRight, ChevronLeft, Loader2,
-  Flame, LogOut, User,
+  Flame, LogOut, User, Code2, Database,
 } from 'lucide-react';
 import SEO from '../components/SEO.jsx';
 
@@ -73,6 +73,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewDate, setViewDate] = useState(() => new Date());
+  const [statsDomain, setStatsDomain] = useState('all'); // 'all' | 'dsa' | 'sql'
 
   const handleLogout = async () => {
     await logout();
@@ -151,7 +152,6 @@ export default function DashboardPage() {
         </div>
       ) : stats ? (
         <>
-          {/* Top row: Stats cards + Calendar */}
           <div className="flex flex-col lg:flex-row gap-6 mb-6">
             {/* Left: Stats */}
             <motion.div
@@ -160,46 +160,106 @@ export default function DashboardPage() {
               transition={{ duration: 0.4, delay: 0.05 }}
               className="flex-1"
             >
-              <div className="grid grid-cols-2 gap-4">
+              {/* Domain toggle */}
+              <div className="flex items-center gap-1 mb-5 bg-bg-card border border-border rounded-xl p-1 w-fit">
                 {[
-                  { label: 'Solved', value: stats.solvedProblems, sub: `out of ${stats.totalProblems}`, color: 'text-emerald-400', border: 'border-emerald-400/20' },
-                  { label: 'Attempted', value: stats.attemptedProblems, sub: 'in progress', color: 'text-amber-400', border: 'border-amber-400/20' },
-                  { label: 'Easy Done', value: stats.easySolved, sub: 'problems', color: 'text-sky-400', border: 'border-sky-400/20' },
-                  { label: 'Hard Done', value: stats.hardSolved, sub: 'problems', color: 'text-red-400', border: 'border-red-400/20' },
-                ].map((s) => (
-                  <div key={s.label} className={`bg-bg-card border ${s.border} rounded-2xl p-5`}>
-                    <p className={`text-3xl font-black ${s.color} mb-1 tabular-nums`}>{s.value}</p>
-                    <p className="text-white text-sm font-semibold">{s.label}</p>
-                    <p className="text-text-muted text-xs mt-0.5">{s.sub}</p>
-                  </div>
+                  { id: 'all', label: 'All', icon: null },
+                  { id: 'dsa', label: '⚙️ DSA', icon: Code2 },
+                  { id: 'sql', label: '🗄️ SQL', icon: Database },
+                ].map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setStatsDomain(d.id)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      statsDomain === d.id
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'text-text-secondary hover:text-white'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
                 ))}
-
               </div>
-              {/* Overall progress bar */}
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-                className="bg-bg-card border border-border rounded-2xl p-6 mb-6 mt-6"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-white font-semibold">Overall Progress</p>
-                    <p className="text-text-muted text-xs mt-0.5">
-                      {stats.solvedProblems} of {stats.totalProblems} problems solved
-                    </p>
-                  </div>
-                  <span className="text-2xl font-black text-accent">{stats.completionPercentage}%</span>
-                </div>
-                <div className="w-full bg-bg-elevated rounded-full h-2" role="progressbar" aria-valuenow={stats.completionPercentage} aria-valuemin={0} aria-valuemax={100}>
-                  <motion.div
-                    className="h-2 rounded-full bg-gradient-to-r from-accent to-amber-400"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${stats.completionPercentage}%` }}
-                    transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
-                  />
-                </div>
-              </motion.div>
+
+              {/* Stats cards */}
+              {(() => {
+                const src =
+                  statsDomain === 'dsa' ? stats.dsa
+                  : statsDomain === 'sql' ? stats.sql
+                  : null; // null = overall
+
+                const solved = src ? src.solved : stats.solvedProblems;
+                const attempted = src ? src.attempted : stats.attemptedProblems;
+                const total = src ? src.total : stats.totalProblems;
+                const easySolved = src ? src.easySolved : stats.easySolved;
+                const hardSolved = src ? src.hardSolved : stats.hardSolved;
+                const completion = src ? src.completionPercentage : stats.completionPercentage;
+
+                const cards = [
+                  { label: 'Solved', value: solved, sub: `out of ${total}`, color: 'text-emerald-400', border: 'border-emerald-400/20' },
+                  { label: 'Attempted', value: attempted, sub: 'in progress', color: 'text-amber-400', border: 'border-amber-400/20' },
+                  { label: 'Easy Done', value: easySolved, sub: 'problems', color: 'text-sky-400', border: 'border-sky-400/20' },
+                  { label: 'Hard Done', value: hardSolved, sub: 'problems', color: 'text-red-400', border: 'border-red-400/20' },
+                ];
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      {cards.map((s) => (
+                        <div key={s.label} className={`bg-bg-card border ${s.border} rounded-2xl p-5`}>
+                          <p className={`text-3xl font-black ${s.color} mb-1 tabular-nums`}>{s.value}</p>
+                          <p className="text-white text-sm font-semibold">{s.label}</p>
+                          <p className="text-text-muted text-xs mt-0.5">{s.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Progress bar */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: 0.1 }}
+                      className="bg-bg-card border border-border rounded-2xl p-6 mb-6 mt-6"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-white font-semibold">
+                            {statsDomain === 'dsa' ? 'DSA Progress' : statsDomain === 'sql' ? 'SQL Progress' : 'Overall Progress'}
+                          </p>
+                          <p className="text-text-muted text-xs mt-0.5">
+                            {solved} of {total} problems solved
+                          </p>
+                        </div>
+                        <span className="text-2xl font-black text-accent">{completion}%</span>
+                      </div>
+                      <div className="w-full bg-bg-elevated rounded-full h-2" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100}>
+                        <motion.div
+                          className={`h-2 rounded-full bg-gradient-to-r ${
+                            statsDomain === 'sql'
+                              ? 'from-indigo-500 to-violet-400'
+                              : statsDomain === 'dsa'
+                              ? 'from-emerald-500 to-teal-400'
+                              : 'from-accent to-amber-400'
+                          }`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${completion}%` }}
+                          transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
+                        />
+                      </div>
+
+                      {/* Quick link to domain */}
+                      {statsDomain !== 'all' && (
+                        <Link
+                          to={statsDomain === 'sql' ? '/sql' : '/problems'}
+                          className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors"
+                        >
+                          Practice {statsDomain.toUpperCase()} problems <ChevronRight className="w-3 h-3" />
+                        </Link>
+                      )}
+                    </motion.div>
+                  </>
+                );
+              })()}
             </motion.div>
 
             {/* Right: Streak Calendar */}

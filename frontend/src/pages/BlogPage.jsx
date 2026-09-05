@@ -11,6 +11,7 @@ import BlogCTA from '../components/blog/BlogCTA';
 import BlogSkeleton from '../components/blog/BlogSkeleton';
 import BlogError from '../components/blog/BlogError';
 import SEO from '../components/SEO';
+import SolutionView from '../components/blog/SolutionView';
 
 export default function BlogPage() {
   const { slug } = useParams();
@@ -56,34 +57,57 @@ export default function BlogPage() {
     return <BlogError message={error || 'This solution hasn\'t been published yet.'} />;
   }
 
-  const tocSections = blog.content || [];
+  const isCodingSolution = blog.blogType === 'CODING_SOLUTION' || Boolean(blog.code || blog.intuition || blog.approach);
+  
+  // Construct TOC entries for solutions or fallback to article sections
+  let tocSections = [];
+  if (isCodingSolution) {
+    if (blog.excerpt) tocSections.push({ type: 'heading', level: 2, content: 'Problem Statement', id: 'problem-statement' });
+    if (blog.intuition) tocSections.push({ type: 'heading', level: 2, content: 'Intuition', id: 'intuition' });
+    if (blog.approach) tocSections.push({ type: 'heading', level: 2, content: 'Approach', id: 'approach' });
+    if (blog.timeComplexity || blog.spaceComplexity) tocSections.push({ type: 'heading', level: 2, content: 'Complexity Analysis', id: 'complexity' });
+    if (blog.code) tocSections.push({ type: 'heading', level: 2, content: 'Code', id: 'code' });
+  } else {
+    tocSections = blog.content?.sections || blog.content || [];
+  }
 
   return (
     <>
       <SEO
-        title={blog.metaTitle || `${blog.title} — Complete Solution | CompanyWiseSheet`}
-        description={blog.metaDescription || blog.excerpt}
-        keywords={blog.keywords?.length ? blog.keywords.join(', ') : ''}
+        title={blog.metaTitle || `${blog.title} — ${isCodingSolution ? 'Editorial & Solution' : 'Article'} | CodeRank`}
+        description={blog.metaDescription || blog.excerpt || blog.intuition?.slice(0, 160)}
+        keywords={blog.keywords?.length ? blog.keywords.join(', ') : (blog.tags?.join(', ') || '')}
         schema={{
           '@context': 'https://schema.org',
           '@type': 'Article',
           'headline': blog.title,
-          'description': blog.excerpt,
+          'description': blog.excerpt || blog.intuition,
           'datePublished': blog.publishedAt,
           'author': {
             '@type': 'Person',
-            'name': blog.author?.name || 'CompanyWiseSheet Team',
+            'name': blog.author?.name || 'CodeRank Contributor',
           },
         }}
       />
 
       <BlogLayout toc={tocSections} title={blog.title}>
-        <BlogHeader blog={blog} />
-        <ProblemInfoCard problem={blog.problem} />
-        <BlogContent content={blog.content} />
-        <BlogComments blogId={blog._id} />
-        <BlogCTA problem={blog.problem} />
-        <RelatedBlogs blogs={related} />
+        {isCodingSolution ? (
+          <>
+            <SolutionView blog={blog} />
+            <BlogComments blogId={blog._id} />
+            {blog.problem && <BlogCTA problem={blog.problem} />}
+            <RelatedBlogs blogs={related} />
+          </>
+        ) : (
+          <>
+            <BlogHeader blog={blog} />
+            {blog.problem && <ProblemInfoCard problem={blog.problem} />}
+            <BlogContent content={blog.content} />
+            <BlogComments blogId={blog._id} />
+            {blog.problem && <BlogCTA problem={blog.problem} />}
+            <RelatedBlogs blogs={related} />
+          </>
+        )}
       </BlogLayout>
     </>
   );
