@@ -97,7 +97,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', protect, getDashboard);
 app.use('/api/seo', seoRoutes);
 app.use('/api/blogs', blogRoutes);
-app.use('/api/platforms', platformRoutes);
+// app.use('/api/platforms', platformRoutes);
 app.use('/api/feedback', feedbackRoutes);
 
 // Mount SEO routes on root as well for direct /sitemap.xml and /robots.txt access
