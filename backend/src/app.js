@@ -16,6 +16,7 @@ import progressRoutes from './routes/progress.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import seoRoutes from './routes/seo.routes.js';
 import blogRoutes from './routes/blog.routes.js';
+import platformRoutes from './routes/platform.routes.js';
 
 // Progress controller for dashboard (separate route)
 import { getDashboard } from './controllers/progress.controller.js';
@@ -95,6 +96,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', protect, getDashboard);
 app.use('/api/seo', seoRoutes);
 app.use('/api/blogs', blogRoutes);
+app.use('/api/platforms', platformRoutes);
 
 // Mount SEO routes on root as well for direct /sitemap.xml and /robots.txt access
 app.use('/', seoRoutes);
