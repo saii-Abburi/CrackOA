@@ -5,7 +5,8 @@ import Papa from 'papaparse';
 import {
   Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2,
   Building2, Code2, Users, Database, Plus, Trash2, Edit3, RefreshCw,
-  Search, ExternalLink, Sparkles, X, ChevronRight
+  Search, ExternalLink, Sparkles, X, ChevronRight,
+  MessageSquarePlus, Bug, Lightbulb, Star, Archive, Eye,
 } from 'lucide-react';
 import {
   getAdminStatsApi,
@@ -15,6 +16,7 @@ import {
   createProblemApi,
   deleteProblemApi
 } from '../api/admin.api.js';
+import { getAdminFeedbackApi, updateFeedbackStatusApi } from '../api/feedback.api.js';
 import api from '../api/axiosInstance.js';
 import ProblemsTable from '../components/ProblemsTable.jsx';
 import SEO from '../components/SEO.jsx';
@@ -30,7 +32,7 @@ const SAMPLE_CSV = `ID,Title,Acceptance,Difficulty,Frequency,Leetcode Question L
 53,Maximum Subarray,49.5%,Medium,85.3%,https://leetcode.com/problems/maximum-subarray/,"Array, Dynamic Programming","Amazon, Apple, Microsoft, Google"`;
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('csv'); // 'csv' | 'companies' | 'problems' | 'sql' | 'stats'
+  const [activeTab, setActiveTab] = useState('csv'); // 'csv' | 'companies' | 'problems' | 'sql' | 'stats' | 'feedback'
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -79,6 +81,15 @@ export default function AdminPage() {
     }
   });
 
+  // Feedback Tab State
+  const [feedbackList, setFeedbackList] = useState([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackPagination, setFeedbackPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [feedbackPage, setFeedbackPage] = useState(1);
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('');
+  const [feedbackTypeFilter, setFeedbackTypeFilter] = useState('');
+  const [feedbackUpdating, setFeedbackUpdating] = useState({});
+
   // Fetch system stats
   const fetchStats = async () => {
     setStatsLoading(true);
@@ -89,6 +100,37 @@ export default function AdminPage() {
       console.error('Failed to fetch stats:', err);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  // Fetch Feedback
+  const fetchFeedback = async () => {
+    setFeedbackLoading(true);
+    try {
+      const result = await getAdminFeedbackApi({
+        page: feedbackPage,
+        limit: 20,
+        status: feedbackStatusFilter || undefined,
+        type: feedbackTypeFilter || undefined,
+      });
+      setFeedbackList(result.feedback || []);
+      setFeedbackPagination(result.pagination || { page: 1, totalPages: 1, total: 0 });
+    } catch (err) {
+      console.error('Failed to fetch feedback:', err);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  const handleUpdateFeedbackStatus = async (id, newStatus) => {
+    setFeedbackUpdating((prev) => ({ ...prev, [id]: true }));
+    try {
+      const updated = await updateFeedbackStatusApi(id, newStatus);
+      setFeedbackList((prev) => prev.map((fb) => (fb._id === id ? updated : fb)));
+    } catch (err) {
+      console.error('Failed to update feedback status:', err);
+    } finally {
+      setFeedbackUpdating((prev) => ({ ...prev, [id]: false }));
     }
   };
 
@@ -162,6 +204,14 @@ export default function AdminPage() {
   useEffect(() => {
     setSqlPage(1);
   }, [sqlSearch, sqlDifficulty]);
+
+  // Fetch feedback when tab is active or filters/page change
+  useEffect(() => {
+    if (activeTab === 'feedback') {
+      fetchFeedback();
+    }
+  }, [activeTab, feedbackPage, feedbackStatusFilter, feedbackTypeFilter]);
+
 
   // Parse CSV text whenever it changes
   const handleParseCsv = (text) => {
@@ -385,6 +435,7 @@ export default function AdminPage() {
             { id: 'problems', label: `DSA Problems (${problemPagination.total || 0})`, icon: Code2 },
             { id: 'sql', label: `SQL Problems (${sqlPagination.total || 0})`, icon: Database },
             { id: 'stats', label: 'Overview & Health', icon: Users },
+            { id: 'feedback', label: `Feedback (${feedbackPagination.total || 0})`, icon: MessageSquarePlus },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -921,6 +972,136 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* TAB 6: FEEDBACK */}
+        {activeTab === 'feedback' && (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={feedbackStatusFilter}
+                onChange={(e) => { setFeedbackStatusFilter(e.target.value); setFeedbackPage(1); }}
+                className="px-3 py-2 bg-bg-elevated border border-border rounded-xl text-white text-xs focus:outline-none focus:border-accent"
+              >
+                <option value="">All Statuses</option>
+                <option value="new">New</option>
+                <option value="reviewed">Reviewed</option>
+                <option value="archived">Archived</option>
+              </select>
+              <select
+                value={feedbackTypeFilter}
+                onChange={(e) => { setFeedbackTypeFilter(e.target.value); setFeedbackPage(1); }}
+                className="px-3 py-2 bg-bg-elevated border border-border rounded-xl text-white text-xs focus:outline-none focus:border-accent"
+              >
+                <option value="">All Types</option>
+                <option value="bug">Bug Reports</option>
+                <option value="feature">Feature Requests</option>
+                <option value="content">Content Issues</option>
+                <option value="general">General</option>
+              </select>
+              <button onClick={fetchFeedback} className="btn-secondary text-xs py-2 px-4 flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </button>
+              <span className="text-xs text-text-muted ml-auto">{feedbackPagination.total || 0} submissions</span>
+            </div>
+
+            {feedbackLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin text-accent" />
+              </div>
+            ) : feedbackList.length === 0 ? (
+              <div className="bg-bg-card border border-border rounded-2xl p-12 text-center">
+                <MessageSquarePlus className="w-10 h-10 text-text-muted mx-auto mb-3" />
+                <p className="text-text-muted text-sm">No feedback submissions yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {feedbackList.map((fb) => {
+                  const typeColors = {
+                    bug: 'text-red-400 bg-red-400/10 border-red-400/30',
+                    feature: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
+                    content: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
+                    general: 'text-accent bg-accent/10 border-accent/30',
+                  };
+                  const statusColors = {
+                    new: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+                    reviewed: 'text-text-muted bg-bg-elevated border-border',
+                    archived: 'text-text-muted bg-bg-elevated border-border opacity-60',
+                  };
+                  return (
+                    <div key={fb._id} className={`bg-bg-card border border-border rounded-2xl p-5 transition-all ${
+                      fb.status === 'archived' ? 'opacity-60' : ''
+                    }`}>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${typeColors[fb.type] || typeColors.general}`}>
+                            {fb.type}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${statusColors[fb.status] || statusColors.new}`}>
+                            {fb.status}
+                          </span>
+                          {fb.rating && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-yellow-400">
+                              {'★'.repeat(fb.rating)}{'☆'.repeat(5 - fb.rating)}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-text-muted shrink-0">
+                          {new Date(fb.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <p className="text-sm font-semibold text-white mb-1">{fb.subject}</p>
+                      <p className="text-xs text-text-secondary leading-relaxed mb-3">{fb.message}</p>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[10px] text-text-muted">
+                          {fb.user ? (
+                            <span><span className="text-text-secondary font-medium">{fb.user.name}</span> · {fb.user.email}</span>
+                          ) : 'Anonymous'}
+                          {fb.page && <span className="ml-2">· {fb.page}</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {(['new', 'reviewed', 'archived']).filter(s => s !== fb.status).map(s => (
+                            <button
+                              key={s}
+                              disabled={feedbackUpdating[fb._id]}
+                              onClick={() => handleUpdateFeedbackStatus(fb._id, s)}
+                              className="px-2.5 py-1 rounded-lg bg-bg-elevated border border-border text-[10px] font-semibold text-text-muted hover:text-white transition-all capitalize disabled:opacity-40"
+                            >
+                              {feedbackUpdating[fb._id] ? <Loader2 className="w-3 h-3 animate-spin inline" /> : null} Mark {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {feedbackPagination.totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-4">
+                <button
+                  disabled={feedbackPage <= 1}
+                  onClick={() => setFeedbackPage((p) => p - 1)}
+                  className="px-3 py-1.5 rounded-xl bg-bg-elevated border border-border text-xs text-text-secondary hover:text-white disabled:opacity-40 transition-all"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-text-muted">Page {feedbackPage} of {feedbackPagination.totalPages}</span>
+                <button
+                  disabled={feedbackPage >= feedbackPagination.totalPages}
+                  onClick={() => setFeedbackPage((p) => p + 1)}
+                  className="px-3 py-1.5 rounded-xl bg-bg-elevated border border-border text-xs text-text-secondary hover:text-white disabled:opacity-40 transition-all"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ADD COMPANY MODAL */}
         {showAddCompanyModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1048,80 +1229,80 @@ export default function AdminPage() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* ADD SQL PROBLEM MODAL */}
-      {showAddSqlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-bg-card border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Database className="w-5 h-5 text-indigo-400" /> Add SQL Problem
-              </h3>
-              <button onClick={() => setShowAddSqlModal(false)} className="text-text-muted hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateSqlProblem} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Title *</label>
-                  <input type="text" required value={newSqlProblem.title} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, title: e.target.value })}
-                    placeholder="e.g. Second Highest Salary" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Difficulty *</label>
-                  <select value={newSqlProblem.difficulty} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, difficulty: e.target.value })}
-                    className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500">
-                    <option>Easy</option><option>Medium</option><option>Hard</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Topics (comma-separated)</label>
-                <input type="text" value={newSqlProblem.topics} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, topics: e.target.value })}
-                  placeholder="SELECT, GROUP BY, HAVING" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Problem Description (HTML/text)</label>
-                <textarea rows={3} value={newSqlProblem.description} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, description: e.target.value })}
-                  placeholder="Write the problem statement here..." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Schema Description (CREATE TABLE / DDL)</label>
-                <textarea rows={4} value={newSqlProblem.sqlMeta.schemaDescription} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, schemaDescription: e.target.value } })}
-                  placeholder="CREATE TABLE Employee (id INT, salary INT);" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Expected Output</label>
-                <textarea rows={3} value={newSqlProblem.sqlMeta.expectedOutput} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, expectedOutput: e.target.value } })}
-                  placeholder="+--------+\n| salary |\n+--------+\n|    200 |\n+--------+" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Explanation</label>
-                <textarea rows={3} value={newSqlProblem.sqlMeta.explanation} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, explanation: e.target.value } })}
-                  placeholder="Explain how the correct query works..." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 resize-y" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Reference Query (Admin only — not shown to users)</label>
-                <textarea rows={3} value={newSqlProblem.sqlMeta.referenceQuery} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, referenceQuery: e.target.value } })}
-                  placeholder="SELECT MAX(salary) FROM Employee WHERE salary != (SELECT MAX(salary) FROM Employee);" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Constraints (one per line)</label>
-                <textarea rows={2} value={newSqlProblem.sqlMeta.constraints} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, constraints: e.target.value } })}
-                  placeholder="Table will have at least one row.&#10;salary values are unique." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddSqlModal(false)} className="btn-secondary text-xs flex-1 py-2">Cancel</button>
-                <button type="submit" className="text-xs flex-1 py-2 justify-center bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-colors">
-                  Create SQL Problem
+        {/* ADD SQL PROBLEM MODAL */}
+        {showAddSqlModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-bg-card border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Database className="w-5 h-5 text-indigo-400" /> Add SQL Problem
+                </h3>
+                <button onClick={() => setShowAddSqlModal(false)} className="text-text-muted hover:text-white">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
+              <form onSubmit={handleCreateSqlProblem} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Title *</label>
+                    <input type="text" required value={newSqlProblem.title} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, title: e.target.value })}
+                      placeholder="e.g. Second Highest Salary" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Difficulty *</label>
+                    <select value={newSqlProblem.difficulty} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, difficulty: e.target.value })}
+                      className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500">
+                      <option>Easy</option><option>Medium</option><option>Hard</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Topics (comma-separated)</label>
+                  <input type="text" value={newSqlProblem.topics} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, topics: e.target.value })}
+                    placeholder="SELECT, GROUP BY, HAVING" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Problem Description (HTML/text)</label>
+                  <textarea rows={3} value={newSqlProblem.description} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, description: e.target.value })}
+                    placeholder="Write the problem statement here..." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Schema Description (CREATE TABLE / DDL)</label>
+                  <textarea rows={4} value={newSqlProblem.sqlMeta.schemaDescription} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, schemaDescription: e.target.value } })}
+                    placeholder="CREATE TABLE Employee (id INT, salary INT);" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Expected Output</label>
+                  <textarea rows={3} value={newSqlProblem.sqlMeta.expectedOutput} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, expectedOutput: e.target.value } })}
+                    placeholder="+--------+\n| salary |\n+--------+\n|    200 |\n+--------+" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Explanation</label>
+                  <textarea rows={3} value={newSqlProblem.sqlMeta.explanation} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, explanation: e.target.value } })}
+                    placeholder="Explain how the correct query works..." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Reference Query (Admin only — not shown to users)</label>
+                  <textarea rows={3} value={newSqlProblem.sqlMeta.referenceQuery} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, referenceQuery: e.target.value } })}
+                    placeholder="SELECT MAX(salary) FROM Employee WHERE salary != (SELECT MAX(salary) FROM Employee);" className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Constraints (one per line)</label>
+                  <textarea rows={2} value={newSqlProblem.sqlMeta.constraints} onChange={(e) => setNewSqlProblem({ ...newSqlProblem, sqlMeta: { ...newSqlProblem.sqlMeta, constraints: e.target.value } })}
+                    placeholder="Table will have at least one row.&#10;salary values are unique." className="w-full p-2.5 bg-bg-elevated border border-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-y" />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={() => setShowAddSqlModal(false)} className="btn-secondary text-xs flex-1 py-2">Cancel</button>
+                  <button type="submit" className="text-xs flex-1 py-2 justify-center bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-colors">
+                    Create SQL Problem
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
