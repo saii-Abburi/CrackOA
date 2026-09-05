@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.jsx';
 import { updateProfileApi, updatePasswordApi } from '../api/auth.api.js';
+import { getPlatformAccountsApi } from '../api/platform.api.js';
+import PlatformCard from '../components/settings/PlatformCard.jsx';
 import {
   User, Lock, Shield, CheckCircle2, AlertCircle, Loader2,
-  Eye, EyeOff, KeyRound, Mail, Calendar, Sparkles
+  Eye, EyeOff, KeyRound, Mail, Calendar, Sparkles, Link2
 } from 'lucide-react';
 import SEO from '../components/SEO.jsx';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security' | 'platforms'
 
   // Profile Form State
   const [name, setName] = useState(user?.name || '');
@@ -28,6 +30,32 @@ export default function SettingsPage() {
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securitySuccess, setSecuritySuccess] = useState('');
   const [securityError, setSecurityError] = useState('');
+
+  // Platform Accounts State
+  const PLATFORMS = ['leetcode', 'codeforces', 'geeksforgeeks'];
+  const [platformAccounts, setPlatformAccounts] = useState({}); // { platform: accountObj | null }
+  const [platformsLoading, setPlatformsLoading] = useState(false);
+
+  // Fetch platform accounts when tab is first opened
+  useEffect(() => {
+    if (activeTab === 'platforms' && Object.keys(platformAccounts).length === 0) {
+      setPlatformsLoading(true);
+      getPlatformAccountsApi()
+        .then((accounts) => {
+          const map = {};
+          PLATFORMS.forEach((p) => { map[p] = null; });
+          accounts.forEach((acc) => { map[acc.platform] = acc; });
+          setPlatformAccounts(map);
+        })
+        .catch(() => {})
+        .finally(() => setPlatformsLoading(false));
+    }
+  }, [activeTab]);
+
+  // Called by PlatformCard when an account is added/updated/removed
+  const handleAccountChange = (platform, account) => {
+    setPlatformAccounts((prev) => ({ ...prev, [platform]: account }));
+  };
 
   // Handle Profile Update
   const handleProfileSubmit = async (e) => {
@@ -129,6 +157,18 @@ export default function SettingsPage() {
         >
           <Lock className="w-4 h-4" />
           Password & Security
+        </button>
+
+        <button
+          onClick={() => setActiveTab('platforms')}
+          className={`flex items-center gap-2.5 px-5 py-3 text-sm font-semibold border-b-2 transition-all shrink-0 ${
+            activeTab === 'platforms'
+              ? 'border-accent text-white bg-accent/5'
+              : 'border-transparent text-text-secondary hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Link2 className="w-4 h-4" />
+          Coding Platforms
         </button>
       </div>
 
@@ -361,6 +401,42 @@ export default function SettingsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </motion.div>
+      )}
+      {/* TAB 3: CODING PLATFORMS */}
+      {activeTab === 'platforms' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-6"
+        >
+          <div className="bg-bg-card border border-border rounded-2xl p-6 sm:p-8">
+            <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-accent" />
+              Coding Platforms
+            </h2>
+            <p className="text-text-muted text-xs mb-6">
+              Connect your external coding profiles. Stats are fetched from official sources and cached — we never store credentials.
+            </p>
+
+            {platformsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-accent" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {PLATFORMS.map((platform) => (
+                  <PlatformCard
+                    key={platform}
+                    platform={platform}
+                    account={platformAccounts[platform] ?? null}
+                    onAccountChange={handleAccountChange}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </motion.div>
       )}
