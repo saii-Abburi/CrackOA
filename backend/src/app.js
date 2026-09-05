@@ -16,7 +16,7 @@ import progressRoutes from './routes/progress.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import seoRoutes from './routes/seo.routes.js';
 import blogRoutes from './routes/blog.routes.js';
-import platformRoutes from './routes/platform.routes.js';
+// import platformRoutes from './routes/platform.routes.js';
 import feedbackRoutes from './routes/feedback.routes.js';
 
 // Progress controller for dashboard (separate route)
