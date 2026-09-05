@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import UserProgress from '../models/UserProgress.js';
 import Problem from '../models/Problem.js';
 import Company from '../models/Company.js';
@@ -5,10 +6,21 @@ import User from '../models/User.js';
 
 /**
  * Upsert (create or update) a progress record for a user+problem.
+ * Works for both DSA and SQL problems — accepts ObjectId, leetcodeId, or slug.
  */
 export const upsertProgress = async (userId, problemId, { status, notes }) => {
-  // Verify problem exists
-  const problem = await Problem.findById(problemId).lean();
+  // Flexible problem lookup
+  let problem = null;
+  if (mongoose.Types.ObjectId.isValid(problemId)) {
+    problem = await Problem.findById(problemId).lean();
+  }
+  if (!problem && !isNaN(Number(problemId))) {
+    problem = await Problem.findOne({ leetcodeId: Number(problemId) }).lean();
+  }
+  if (!problem && typeof problemId === 'string') {
+    problem = await Problem.findOne({ slug: problemId }).lean();
+  }
+
   if (!problem) {
     const error = new Error('Problem not found.');
     error.statusCode = 404;
@@ -17,24 +29,22 @@ export const upsertProgress = async (userId, problemId, { status, notes }) => {
   }
 
   const updateData = {};
-  if (status !== undefined) updateData.status = status;
+  if (status !== undefined) {
+    updateData.status = status;
+    if (status === 'solved') {
+      updateData.solvedAt = new Date();
+    } else {
+      updateData.solvedAt = null;
+    }
+  }
   if (notes !== undefined) updateData.notes = notes;
 
-  // findOneAndUpdate with upsert so we handle both create & update in one call
+  // findOneAndUpdate with upsert so we handle both create & update atomically
   const progress = await UserProgress.findOneAndUpdate(
-    { user: userId, problem: problemId },
+    { user: userId, problem: problem._id },
     { $set: updateData },
     { new: true, upsert: true, runValidators: true }
-  ).populate('problem', 'title difficulty leetcodeId slug');
-
-  // Handle solvedAt manually since pre-save doesn't fire on findOneAndUpdate
-  if (status === 'solved' && !progress.solvedAt) {
-    progress.solvedAt = new Date();
-    await progress.save();
-  } else if (status && status !== 'solved' && progress.solvedAt) {
-    progress.solvedAt = null;
-    await progress.save();
-  }
+  ).populate('problem', 'title difficulty leetcodeId slug domain');
 
   return progress;
 };
@@ -44,7 +54,7 @@ export const upsertProgress = async (userId, problemId, { status, notes }) => {
  */
 export const getUserProgress = async (userId) => {
   return UserProgress.find({ user: userId })
-    .populate('problem', 'title difficulty leetcodeId slug acceptanceRate frequency topics companies')
+    .populate('problem', 'title difficulty leetcodeId slug acceptanceRate frequency topics companies domain')
     .sort({ updatedAt: -1 })
     .lean();
 };
@@ -53,8 +63,16 @@ export const getUserProgress = async (userId) => {
  * Get progress for a single problem for the authenticated user.
  */
 export const getProgressByProblem = async (userId, problemId) => {
-  const progress = await UserProgress.findOne({ user: userId, problem: problemId })
-    .populate('problem', 'title difficulty leetcodeId slug')
+  let pId = problemId;
+  if (!mongoose.Types.ObjectId.isValid(pId)) {
+    const prob = await Problem.findOne({
+      $or: [{ slug: pId }, ...(isNaN(Number(pId)) ? [] : [{ leetcodeId: Number(pId) }])]
+    }).select('_id').lean();
+    if (prob) pId = prob._id;
+  }
+
+  const progress = await UserProgress.findOne({ user: userId, problem: pId })
+    .populate('problem', 'title difficulty leetcodeId slug domain')
     .lean();
 
   if (!progress) {
@@ -68,48 +86,98 @@ export const getProgressByProblem = async (userId, problemId) => {
 };
 
 /**
- * Delete a progress record.
+ * Delete a progress record (idempotent — returns cleanly even if not previously found).
  */
 export const deleteProgress = async (userId, problemId) => {
-  const progress = await UserProgress.findOneAndDelete({ user: userId, problem: problemId });
-  if (!progress) {
-    const error = new Error('Progress record not found.');
-    error.statusCode = 404;
-    error.code = 'PROGRESS_NOT_FOUND';
-    throw error;
+  let pId = problemId;
+  if (!mongoose.Types.ObjectId.isValid(pId)) {
+    const prob = await Problem.findOne({
+      $or: [{ slug: pId }, ...(isNaN(Number(pId)) ? [] : [{ leetcodeId: Number(pId) }])]
+    }).select('_id').lean();
+    if (prob) pId = prob._id;
   }
-  return progress;
+
+  const progress = await UserProgress.findOneAndDelete({ user: userId, problem: pId });
+  return progress || { deleted: true };
+};
+
+/**
+ * Build difficulty breakdown of solved problems for a given domain filter.
+ * @param {mongoose.Types.ObjectId} userId
+ * @param {string|null} domain - 'dsa' | 'sql' | null (all)
+ */
+const getSolvedByDifficulty = async (userId, domain = null) => {
+  const matchStage = { user: userId, status: 'solved' };
+
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: 'problems',
+        localField: 'problem',
+        foreignField: '_id',
+        as: 'problemData',
+      },
+    },
+    { $unwind: '$problemData' },
+  ];
+
+  // Add domain filter after lookup if specified
+  if (domain === 'sql') {
+    pipeline.push({ $match: { 'problemData.domain': 'sql' } });
+  } else if (domain === 'dsa') {
+    pipeline.push({ $match: { 'problemData.domain': { $ne: 'sql' } } });
+  }
+
+  pipeline.push({
+    $group: {
+      _id: '$problemData.difficulty',
+      count: { $sum: 1 },
+    },
+  });
+
+  const results = await UserProgress.aggregate(pipeline);
+  const map = { Easy: 0, Medium: 0, Hard: 0 };
+  results.forEach(({ _id, count }) => {
+    if (_id && map[_id] !== undefined) {
+      map[_id] = count;
+    }
+  });
+  return map;
 };
 
 /**
  * Get dashboard statistics for the authenticated user.
+ * Returns combined (overall), dsa-only, and sql-only breakdowns.
  */
 export const getDashboardStats = async (userId) => {
-  const totalProblems = await Problem.countDocuments();
+  // ── Problem counts per domain ──────────────────────────────────────────────
+  const [totalProblems, totalDsa, totalSql] = await Promise.all([
+    Problem.countDocuments(),
+    Problem.countDocuments({ domain: { $ne: 'sql' } }),
+    Problem.countDocuments({ domain: 'sql' }),
+  ]);
 
-  // Aggregate progress stats
+  // ── Aggregate progress stats (overall) ────────────────────────────────────
   const progressStats = await UserProgress.aggregate([
     { $match: { user: userId } },
-    {
-      $group: {
-        _id: '$status',
-        count: { $sum: 1 },
-      },
-    },
+    { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
 
   const statsMap = { not_started: 0, attempted: 0, solved: 0 };
   progressStats.forEach(({ _id, count }) => {
-    statsMap[_id] = count;
+    if (_id && statsMap[_id] !== undefined) {
+      statsMap[_id] = count;
+    }
   });
 
   const solvedProblems = statsMap.solved;
   const attemptedProblems = statsMap.attempted;
   const remainingProblems = totalProblems - solvedProblems - attemptedProblems;
 
-  // Difficulty breakdown of solved problems
-  const solvedByDifficulty = await UserProgress.aggregate([
-    { $match: { user: userId, status: 'solved' } },
+  // ── Domain-specific progress counts ───────────────────────────────────────
+  const domainProgressStats = await UserProgress.aggregate([
+    { $match: { user: userId } },
     {
       $lookup: {
         from: 'problems',
@@ -121,24 +189,55 @@ export const getDashboardStats = async (userId) => {
     { $unwind: '$problemData' },
     {
       $group: {
-        _id: '$problemData.difficulty',
+        _id: {
+          domain: {
+            $cond: {
+              if: { $eq: ['$problemData.domain', 'sql'] },
+              then: 'sql',
+              else: 'dsa',
+            },
+          },
+          status: '$status',
+        },
         count: { $sum: 1 },
       },
     },
   ]);
 
-  const difficultyMap = { Easy: 0, Medium: 0, Hard: 0 };
-  solvedByDifficulty.forEach(({ _id, count }) => {
-    difficultyMap[_id] = count;
+  const domainMap = {
+    dsa: { not_started: 0, attempted: 0, solved: 0 },
+    sql: { not_started: 0, attempted: 0, solved: 0 },
+  };
+
+  domainProgressStats.forEach(({ _id, count }) => {
+    if (_id?.domain && domainMap[_id.domain] && domainMap[_id.domain][_id.status] !== undefined) {
+      domainMap[_id.domain][_id.status] = count;
+    }
   });
+
+  // ── Difficulty breakdowns ──────────────────────────────────────────────────
+  const [overallDiff, dsaDiff, sqlDiff] = await Promise.all([
+    getSolvedByDifficulty(userId, null),
+    getSolvedByDifficulty(userId, 'dsa'),
+    getSolvedByDifficulty(userId, 'sql'),
+  ]);
 
   const completionPercentage =
     totalProblems > 0
       ? parseFloat(((solvedProblems / totalProblems) * 100).toFixed(1))
       : 0;
 
-  // ── Streak computation ──────────────────────────────────────────────────────
-  // Get all unique dates (in user's calendar, UTC-based) where user solved a problem
+  const dsaCompletion =
+    totalDsa > 0
+      ? parseFloat(((domainMap.dsa.solved / totalDsa) * 100).toFixed(1))
+      : 0;
+
+  const sqlCompletion =
+    totalSql > 0
+      ? parseFloat(((domainMap.sql.solved / totalSql) * 100).toFixed(1))
+      : 0;
+
+  // ── Streak computation ─────────────────────────────────────────────────────
   const solvedDates = await UserProgress.aggregate([
     { $match: { user: userId, status: 'solved', solvedAt: { $ne: null } } },
     {
@@ -151,17 +250,15 @@ export const getDashboardStats = async (userId) => {
     { $sort: { _id: -1 } }, // newest first
   ]);
 
-  const activeDays = solvedDates.map((d) => d._id); // ['2026-08-18', '2026-08-17', ...]
+  const activeDays = solvedDates.map((d) => d._id);
   const totalActiveDays = activeDays.length;
 
   let currentStreak = 0;
   let longestStreak = 0;
 
   if (activeDays.length > 0) {
-    // Sort ascending for longest streak calculation
     const sortedAsc = [...activeDays].sort();
 
-    // Calculate longest streak
     let streak = 1;
     for (let i = 1; i < sortedAsc.length; i++) {
       const prev = new Date(sortedAsc[i - 1]);
@@ -178,7 +275,6 @@ export const getDashboardStats = async (userId) => {
     }
     longestStreak = Math.max(longestStreak, streak);
 
-    // Calculate current streak (consecutive days ending today or yesterday)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().slice(0, 10);
@@ -187,12 +283,10 @@ export const getDashboardStats = async (userId) => {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().slice(0, 10);
 
-    // activeDays is sorted desc (newest first)
     const latestDay = activeDays[0];
 
     if (latestDay === todayStr || latestDay === yesterdayStr) {
       currentStreak = 1;
-      // Walk backwards from the latest day
       for (let i = 1; i < activeDays.length; i++) {
         const curr = new Date(activeDays[i - 1]);
         const prev = new Date(activeDays[i]);
@@ -208,49 +302,91 @@ export const getDashboardStats = async (userId) => {
     }
   }
 
-  // Company-wise progress
+  // ── Company-wise progress (fast, resilient in-memory aggregation) ──────────
   const companies = await Company.find().lean();
 
-  const companyProgress = await Promise.all(
-    companies.map(async (c) => {
-      const companyProblems = await Problem.find({ companies: c._id }).select('_id').lean();
-      const problemIds = companyProblems.map((p) => p._id);
+  // 1. All problem IDs solved by this user
+  const userSolved = await UserProgress.find({ user: userId, status: 'solved' }).select('problem').lean();
+  const solvedProblemIdSet = new Set(userSolved.map((p) => String(p.problem)));
 
-      const solvedCount = await UserProgress.countDocuments({
-        user: userId,
-        problem: { $in: problemIds },
-        status: 'solved',
-      });
+  // 2. All company-tagged problems (anything not SQL)
+  const allCompanyProblems = await Problem.find({
+    companies: { $exists: true, $ne: [] },
+    domain: { $ne: 'sql' },
+  }).select('_id companies').lean();
 
-      return {
-        company: c.name,
-        slug: c.slug,
-        total: c.totalProblems,
-        solved: solvedCount,
-        percentage:
-          c.totalProblems > 0
-            ? parseFloat(((solvedCount / c.totalProblems) * 100).toFixed(1))
-            : 0,
-      };
-    })
-  );
+  // 3. Aggregate totals and solved counts per company
+  const companyStatsMap = new Map();
+  for (const c of companies) {
+    companyStatsMap.set(String(c._id), { total: 0, solved: 0 });
+  }
+
+  for (const p of allCompanyProblems) {
+    const isSolved = solvedProblemIdSet.has(String(p._id));
+    if (Array.isArray(p.companies)) {
+      for (const compId of p.companies) {
+        const stats = companyStatsMap.get(String(compId));
+        if (stats) {
+          stats.total++;
+          if (isSolved) {
+            stats.solved++;
+          }
+        }
+      }
+    }
+  }
+
+  const companyProgress = companies.map((c) => {
+    const stats = companyStatsMap.get(String(c._id)) || { total: 0, solved: 0 };
+    const total = stats.total || c.totalProblems || 0;
+    const solved = stats.solved;
+    const percentage = total > 0 ? parseFloat(((solved / total) * 100).toFixed(1)) : 0;
+    return {
+      company: c.name,
+      slug: c.slug,
+      total,
+      solved,
+      percentage,
+    };
+  });
 
   const userDoc = await User.findById(userId).select('createdAt').lean();
 
   return {
+    // ── Overall (backward-compatible) ──────────────────────────────────────
     totalProblems,
     solvedProblems,
     attemptedProblems,
     remainingProblems: Math.max(0, remainingProblems),
-    easySolved: difficultyMap.Easy,
-    mediumSolved: difficultyMap.Medium,
-    hardSolved: difficultyMap.Hard,
+    easySolved: overallDiff.Easy,
+    mediumSolved: overallDiff.Medium,
+    hardSolved: overallDiff.Hard,
     completionPercentage,
     currentStreak,
     longestStreak,
     totalActiveDays,
     accountCreatedAt: userDoc?.createdAt || null,
-    activeDaysList: activeDays, // ['2026-08-18', '2026-08-17', ...]
+    activeDaysList: activeDays,
     companyProgress,
+
+    // ── Per-domain breakdowns ──────────────────────────────────────────────
+    dsa: {
+      total: totalDsa,
+      solved: domainMap.dsa.solved,
+      attempted: domainMap.dsa.attempted,
+      easySolved: dsaDiff.Easy,
+      mediumSolved: dsaDiff.Medium,
+      hardSolved: dsaDiff.Hard,
+      completionPercentage: dsaCompletion,
+    },
+    sql: {
+      total: totalSql,
+      solved: domainMap.sql.solved,
+      attempted: domainMap.sql.attempted,
+      easySolved: sqlDiff.Easy,
+      mediumSolved: sqlDiff.Medium,
+      hardSolved: sqlDiff.Hard,
+      completionPercentage: sqlCompletion,
+    },
   };
 };

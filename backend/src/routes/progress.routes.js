@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import * as progressController from '../controllers/progress.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
+import { mongoIdParam } from '../middleware/validators.js';
 import validate from '../middleware/validate.middleware.js';
 
 const router = Router();
@@ -11,6 +12,7 @@ router.use(protect);
 
 // Validation for progress upsert
 const progressValidation = [
+  ...mongoIdParam('problemId', 'Problem ID'),
   body('status')
     .optional()
     .isIn(['not_started', 'attempted', 'solved'])
@@ -26,7 +28,12 @@ const progressValidation = [
 router.get('/', progressController.getUserProgress);
 
 // GET /api/progress/:problemId
-router.get('/:problemId', progressController.getProgressByProblem);
+router.get(
+  '/:problemId',
+  mongoIdParam('problemId', 'Problem ID'),
+  validate,
+  progressController.getProgressByProblem
+);
 
 // POST /api/progress/:problemId — create or update
 router.post('/:problemId', progressValidation, validate, progressController.upsertProgress);
@@ -35,6 +42,12 @@ router.post('/:problemId', progressValidation, validate, progressController.upse
 router.patch('/:problemId', progressValidation, validate, progressController.updateProgress);
 
 // DELETE /api/progress/:problemId
-router.delete('/:problemId', progressController.deleteProgress);
+router.delete(
+  '/:problemId',
+  mongoIdParam('problemId', 'Problem ID'),
+  validate,
+  progressController.deleteProgress
+);
 
 export default router;
+

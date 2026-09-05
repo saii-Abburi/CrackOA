@@ -53,13 +53,13 @@ export default function CompanyDetailPage() {
       try {
         const progress = await fetchUserProgress();
         const solved = new Set(
-          progress
-            .filter((p) => p.status === 'solved')
-            .map((p) => (typeof p.problem === 'object' ? p.problem._id : p.problem))
+          (progress || [])
+            .filter((p) => p && p.status === 'solved' && p.problem)
+            .map((p) => String(typeof p.problem === 'object' ? p.problem?._id : p.problem))
         );
         setSolvedSet(solved);
-      } catch {
-        // Not logged in or error — ignore
+      } catch (err) {
+        console.error('Failed to load user progress:', err);
       }
     };
     loadProgress();
@@ -90,11 +90,12 @@ export default function CompanyDetailPage() {
 
   // Progress toggle handler
   const handleToggleSolved = async (problemId, shouldSolve) => {
+    const idStr = String(problemId);
     // Optimistic update
     setSolvedSet((prev) => {
       const next = new Set(prev);
-      if (shouldSolve) next.add(problemId);
-      else next.delete(problemId);
+      if (shouldSolve) next.add(idStr);
+      else next.delete(idStr);
       return next;
     });
 
@@ -104,19 +105,20 @@ export default function CompanyDetailPage() {
       } else {
         await deleteProgress(problemId);
       }
-    } catch {
+    } catch (err) {
+      console.error('Failed to update progress on backend:', err);
       // Revert on error
       setSolvedSet((prev) => {
         const next = new Set(prev);
-        if (shouldSolve) next.delete(problemId);
-        else next.add(problemId);
+        if (shouldSolve) next.delete(idStr);
+        else next.add(idStr);
         return next;
       });
     }
   };
 
   // Stats calculations
-  const solvedCount = problems.filter((p) => solvedSet.has(p._id)).length;
+  const solvedCount = problems.filter((p) => solvedSet.has(String(p._id))).length;
   const progressPct = problems.length > 0 ? Math.round((solvedCount / problems.length) * 100) : 0;
   
   const difficultyStats = useMemo(() => {

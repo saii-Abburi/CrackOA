@@ -52,7 +52,7 @@ export default function FAQ() {
   const [openIndex, setOpenIndex] = useState(0);
 
   return (
-    <section className="py-24 bg-bg-secondary/30" aria-labelledby="faq-heading">
+    <section id="faq" className="py-24 bg-bg-secondary/30" aria-labelledby="faq-heading">
       <div className="container-xl">
         <div className="flex flex-col lg:flex-row gap-16">
           {/* Left — heading */}

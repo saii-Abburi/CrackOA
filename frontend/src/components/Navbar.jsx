@@ -7,9 +7,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 const navLinks = [
   { label: 'Problems', href: '/problems' },
   { label: 'Companies', href: '/companies' },
-  { label: 'Topics', href: '/topics' },
   { label: 'Blogs', href: '/blogs' },
-  { label: 'How It Works', href: '/#how-it-works' },
+  { label: 'Pricing', href: '/#pricing' },
 ];
 
 function UserMenu({ user, onLogout }) {

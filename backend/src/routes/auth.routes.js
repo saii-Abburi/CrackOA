@@ -9,39 +9,123 @@ const router = Router();
 
 // Validation chains
 const registerValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required.').isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters.'),
-  body('email').trim().isEmail().withMessage('Please provide a valid email.').normalizeEmail(),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters.'),
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required.')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be 2-50 characters.'),
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email.')
+    .isLength({ max: 254 })
+    .withMessage('Email cannot exceed 254 characters.')
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 6, max: 128 })
+    .withMessage('Password must be between 6 and 128 characters.'),
 ];
 
 const loginValidation = [
-  body('email').trim().isEmail().withMessage('Please provide a valid email.').normalizeEmail(),
-  body('password').notEmpty().withMessage('Password is required.'),
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email.')
+    .isLength({ max: 254 })
+    .withMessage('Email cannot exceed 254 characters.')
+    .normalizeEmail(),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required.')
+    .isLength({ max: 128 })
+    .withMessage('Password cannot exceed 128 characters.'),
 ];
 
 const sendOtpValidation = [
-  body('email').trim().isEmail().withMessage('Please provide a valid email.').normalizeEmail(),
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email.')
+    .isLength({ max: 254 })
+    .withMessage('Email cannot exceed 254 characters.')
+    .normalizeEmail(),
 ];
 
 const verifyOtpValidation = [
-  body('email').trim().isEmail().withMessage('Please provide a valid email.').normalizeEmail(),
-  body('otp').trim().notEmpty().isLength({ min: 6, max: 6 }).withMessage('OTP must be a 6-digit code.'),
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email.')
+    .isLength({ max: 254 })
+    .withMessage('Email cannot exceed 254 characters.')
+    .normalizeEmail(),
+  body('otp')
+    .trim()
+    .notEmpty()
+    .withMessage('OTP is required.')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('OTP must be a 6-digit code.')
+    .isNumeric()
+    .withMessage('OTP must contain only numbers.'),
 ];
 
 const resetPasswordValidation = [
-  body('email').trim().isEmail().withMessage('Please provide a valid email.').normalizeEmail(),
-  body('otp').trim().notEmpty().isLength({ min: 6, max: 6 }).withMessage('OTP must be a 6-digit code.'),
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters.'),
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email.')
+    .isLength({ max: 254 })
+    .withMessage('Email cannot exceed 254 characters.')
+    .normalizeEmail(),
+  body('otp')
+    .trim()
+    .notEmpty()
+    .withMessage('OTP is required.')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('OTP must be a 6-digit code.')
+    .isNumeric()
+    .withMessage('OTP must contain only numbers.'),
+  body('newPassword')
+    .isLength({ min: 6, max: 128 })
+    .withMessage('New password must be between 6 and 128 characters.'),
 ];
 
 const updateProfileValidation = [
-  body('name').optional().trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters.'),
-  body('email').optional().trim().isEmail().withMessage('Please provide a valid email.').normalizeEmail(),
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be 2-50 characters.'),
+  body('email')
+    .optional()
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email.')
+    .isLength({ max: 254 })
+    .withMessage('Email cannot exceed 254 characters.')
+    .normalizeEmail(),
+  body('role')
+    .optional()
+    .custom(() => {
+      throw new Error('Role cannot be modified via profile update.');
+    }),
+  body('password')
+    .optional()
+    .custom(() => {
+      throw new Error('Password cannot be modified via profile update. Use /update-password.');
+    }),
 ];
 
 const updatePasswordValidation = [
-  body('currentPassword').notEmpty().withMessage('Current password is required.'),
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters.'),
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Current password is required.')
+    .isLength({ max: 128 })
+    .withMessage('Current password cannot exceed 128 characters.'),
+  body('newPassword')
+    .isLength({ min: 6, max: 128 })
+    .withMessage('New password must be between 6 and 128 characters.'),
 ];
 
 // Standard Auth Routes

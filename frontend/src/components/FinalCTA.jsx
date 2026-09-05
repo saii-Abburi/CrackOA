@@ -1,18 +1,18 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function FinalCTA() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <section className="py-32 relative overflow-hidden" aria-labelledby="final-cta-heading">
+    <section className="py-28 relative overflow-hidden" aria-labelledby="final-cta-heading">
       {/* Orange radial glow */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(255,107,0,0.12) 0%, transparent 65%)',
+          background: 'radial-gradient(ellipse at 50% 50%, rgba(255,107,0,0.10) 0%, transparent 65%)',
         }}
         aria-hidden="true"
       />
@@ -24,23 +24,25 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
         >
-          <span className="section-badge mb-8 mx-auto">Get Started</span>
+          <span className="section-badge mb-8 mx-auto">
+            <Zap className="w-3 h-3" aria-hidden="true" />
+            Get Started
+          </span>
 
           <h2
             id="final-cta-heading"
-            className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.1] tracking-tight mb-6"
+            className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight mb-5"
           >
-            Stop guessing
-            <br />
-            what to{' '}
-            <span className="text-gradient-accent">prepare.</span>
+            Your next problem{' '}
+            <span className="text-gradient-accent">is waiting.</span>
           </h2>
 
           <p className="text-text-secondary text-lg max-w-md mx-auto mb-10 leading-relaxed">
             Start solving the problems that actually matter for your target companies.
+            Build consistency. Measure progress.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-5">
             <Link
               to={isAuthenticated ? '/dashboard' : '/register'}
               className="btn-primary text-base px-10 py-4 shadow-accent-md"
@@ -52,12 +54,12 @@ export default function FinalCTA() {
               to="/problems"
               className="btn-secondary text-base px-8 py-4"
             >
-              Browse Problems
+              Explore Problems
             </Link>
           </div>
 
           <p className="text-text-muted text-sm">
-            No credit card required. Free to get started.
+            Free to use. No credit card required.
           </p>
         </motion.div>
       </div>

@@ -6,7 +6,6 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import AdminRoute from './components/AdminRoute.jsx';
 import AuthenticatedLayout from './components/AuthenticatedLayout.jsx';
 
-// Pages
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -23,6 +22,8 @@ import BlogPage from './pages/BlogPage.jsx';
 import UserBlogsPage from './pages/UserBlogsPage.jsx';
 import AdminBlogsPage from './pages/AdminBlogsPage.jsx';
 import ProblemPage from './pages/ProblemPage.jsx';
+import SQLProblemsPage from './pages/SQLProblemsPage.jsx';
+import SQLProblemPage from './pages/SQLProblemPage.jsx';
 
 function App() {
   return (
@@ -57,6 +58,18 @@ function App() {
               <Route path="/problems/:id" element={
                 <AuthenticatedLayout>
                   <ProblemPage />
+                </AuthenticatedLayout>
+              } />
+
+              {/* SQL Problem Routes */}
+              <Route path="/sql" element={
+                <AuthenticatedLayout>
+                  <SQLProblemsPage />
+                </AuthenticatedLayout>
+              } />
+              <Route path="/sql/:id" element={
+                <AuthenticatedLayout>
+                  <SQLProblemPage />
                 </AuthenticatedLayout>
               } />
               <Route path="/companies" element={
@@ -160,6 +173,7 @@ function App() {
             <Route path="/admin" element={null} />
             <Route path="/admin/blogs" element={null} />
             <Route path="/problems/:id" element={null} />
+            <Route path="/sql/:id" element={null} />
             <Route path="*" element={<Footer />} />
           </Routes>
         </div>
