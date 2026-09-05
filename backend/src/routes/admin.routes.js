@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { body } from 'express-validator';
+import { body, query } from 'express-validator';
 import * as companyController from '../controllers/company.controller.js';
 import * as problemController from '../controllers/problem.controller.js';
 import * as blogController from '../controllers/blog.controller.js';
 import { protect, restrictTo } from '../middleware/auth.middleware.js';
 import validate from '../middleware/validate.middleware.js';
+import Feedback from '../models/Feedback.js';
 
 const router = Router();
 
@@ -332,6 +333,79 @@ router.get('/stats', async (req, res, next) => {
         totalProgress,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ----- Admin Feedback Routes -----
+
+/**
+ * GET /api/admin/feedback
+ * List all feedback submissions with pagination, filtering, and sorting.
+ */
+router.get('/feedback', async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const filter = {};
+    if (req.query.status && ['new', 'reviewed', 'archived'].includes(req.query.status)) {
+      filter.status = req.query.status;
+    }
+    if (req.query.type && ['bug', 'feature', 'content', 'general'].includes(req.query.type)) {
+      filter.type = req.query.type;
+    }
+
+    const [items, total] = await Promise.all([
+      Feedback.find(filter)
+        .populate('user', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Feedback.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Feedback fetched.',
+      data: { feedback: items },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/admin/feedback/:id/status
+ * Update the status of a feedback submission.
+ */
+router.patch('/feedback/:id/status', [
+  body('status')
+    .trim()
+    .notEmpty().withMessage('Status is required.')
+    .isIn(['new', 'reviewed', 'archived']).withMessage('Status must be new, reviewed, or archived.'),
+], validate, async (req, res, next) => {
+  try {
+    const fb = await Feedback.findByIdAndUpdate(
+      req.params.id,
+      { status: req.body.status },
+      { new: true, runValidators: true }
+    ).populate('user', 'name email').lean();
+
+    if (!fb) {
+      return res.status(404).json({ success: false, message: 'Feedback not found.' });
+    }
+
+    return res.status(200).json({ success: true, message: 'Feedback status updated.', data: { feedback: fb } });
   } catch (error) {
     next(error);
   }

@@ -24,6 +24,7 @@ import AdminBlogsPage from './pages/AdminBlogsPage.jsx';
 import ProblemPage from './pages/ProblemPage.jsx';
 import SQLProblemsPage from './pages/SQLProblemsPage.jsx';
 import SQLProblemPage from './pages/SQLProblemPage.jsx';
+import FeedbackWidget from './components/FeedbackWidget.jsx';
 
 function App() {
   return (
@@ -176,6 +177,8 @@ function App() {
             <Route path="/sql/:id" element={null} />
             <Route path="*" element={<Footer />} />
           </Routes>
+          {/* Global Feedback Widget — floats on every page for logged-in users */}
+          <FeedbackWidget />
         </div>
       </AuthProvider>
     </BrowserRouter>
